@@ -8,10 +8,8 @@ use tracing::{debug, error, trace, warn};
 use crate::config::GLOBAL_CONFIG;
 use crate::route::resp::resp_error_msg;
 
-#[derive(Debug, Serialize, Deserialize, Default)]
+#[derive(Debug, Serialize, Deserialize)]
 pub enum RouteAction {
-    #[default]
-    Unknown,
     #[serde(rename = "ping")]
     Ping,
     #[serde(rename = "pasteText")]
@@ -24,6 +22,16 @@ pub enum RouteAction {
     Download,
     #[serde(rename = "match")]
     Match,
+    #[serde(rename = "syncText")]
+    SyncText,
+    #[serde(untagged)]
+    Unknown(String),
+}
+
+impl std::default::Default for RouteAction {
+    fn default() -> Self {
+        RouteAction::Unknown("unknown".to_string())
+    }
 }
 
 #[derive(Debug, Serialize, Deserialize, Default)]
@@ -48,7 +56,7 @@ pub struct RouteRecvHead {
     pub end: i64,
     #[serde(rename = "dataLen")]
     pub data_len: i64,
-    /// 操作ID
+    /// 此次上传操作的ID
     #[serde(rename = "opID")]
     pub op_id: u32,
     /// 此次操作想要上传的文件数量
@@ -70,8 +78,9 @@ pub struct RouteRespHead<'a> {
 }
 
 #[derive(Debug, Serialize, Default)]
-pub struct RoutePathInfo {
-    pub path: String,
+pub struct RouteTransferInfo {
+    #[serde(rename = "path")]
+    pub remote_path: String,
     pub size: u64,
     #[serde(rename = "type")]
     pub type_: PathInfoType,
@@ -148,8 +157,11 @@ pub async fn main_process(mut conn: tokio_rustls::server::TlsStream<tokio::net::
             RouteAction::Match => {
                 let _ = match_handler(&mut conn).await;
             }
-            RouteAction::Unknown => {
-                let msg = format!("unknown action: {:?}", head.action);
+            RouteAction::SyncText => {
+                crate::route::paste::sync_text_handler(&mut conn, head).await;
+            }
+            RouteAction::Unknown(action) => {
+                let msg = format!("unknown action: {:?}", action);
                 let _ = crate::route::resp::resp_common_error_msg(&mut conn, &msg).await;
                 error!("{}", msg);
             }
@@ -251,13 +263,10 @@ pub async fn common_auth(conn: &mut TlsStream<TcpStream>) -> Result<RouteRecvHea
     trace!("time_str: {}, ip: {}", time_str, ip);
     let t = chrono::NaiveDateTime::parse_from_str(time_str, TIME_FORMAT)
         .map_err(|e| error!("parse time failed, err: {}", e))?;
-    if chrono::Utc::now()
-        .signed_duration_since(t.and_utc())
-        .num_seconds()
-        > MAX_TIME_DIFF
-    {
-        let msg = format!("time expired: {}", t);
-        error!(msg);
+    let now = chrono::Utc::now();
+    if now.signed_duration_since(t.and_utc()).num_seconds() > MAX_TIME_DIFF {
+        let msg = format!("time expired! recv time: {}, local time: {}", t, now);
+        debug!(msg);
         let _ = resp_error_msg(conn, UNAUTHORIZED_CODE, &msg).await;
         return Err(());
     }
@@ -276,7 +285,7 @@ pub async fn common_auth(conn: &mut TlsStream<TcpStream>) -> Result<RouteRecvHea
     }
     if ip != myip {
         {
-            let external_ips = &GLOBAL_CONFIG.lock().unwrap().external_ips;
+            let external_ips = &GLOBAL_CONFIG.read().unwrap().external_ips;
             if !external_ips.is_none() && external_ips.as_ref().unwrap().contains(&ip.to_string()) {
                 return Ok(head);
             }
@@ -297,7 +306,7 @@ async fn match_handler(conn: &mut TlsStream<TcpStream>) -> Result<(), ()> {
     let action_resp = MatchActionRespBody {
         device_name: hostname,
         secret_key_hex: crate::config::GLOBAL_CONFIG
-            .lock()
+            .read()
             .unwrap()
             .secret_key_hex
             .clone(),

@@ -10,7 +10,7 @@ A set of applications for quickly and securely transferring clipboards, transfer
 
 - **Security** - All data is transmitted encrypted (even if it is a LAN, some people want to be more secure, such as me)
 - **Simple** - The interface is simple and easy to use, open source, free of advertising, and focuses on information transmission
-- **Comprehensive** - Automatically match the computer with the same key in the LAN, and don't worry about switching wifi. It also provides solutions for computers that are not in the same LAN
+- **Comprehensive** - Automatically match the computer with the same key in the LAN, and don't worry about switching wifi
 - **Worry-free** - Don't worry about the connection status with the computer anymore, as long as the computer is online, the mobile phone can send
 - **Fast** - Use multi-threaded asynchronous transmission of files to make full use of bandwidth.
 - **Lightweight** - Does not depend on additional runtime environment, memory usage is less than 10M when idle, and basically no CPU consumption
@@ -28,10 +28,15 @@ A set of applications for quickly and securely transferring clipboards, transfer
 github：[Releases · WindSend](https://github.com/doraemonkeys/WindSend/releases)
 
 
+> PC: You can choose to download **WindSend-S**-XX-x86_64-XXXXX.zip (Provide two implementations of Rust and Go)
+> 
+> Mobile: You can choose to download **WindSend-flutter**-arm64-v8a-release.apk
+
+
 
 ### PC
 
-1. Unzip **WindSend-S-XX-amd64-windows.zip** to any directory (providing Rust and Go implementations).
+1. Unzip **WindSend-S-XX-x86_64-windows.zip** to any directory (Take Windows).
 
 2. Double-click the exe file to run:
    Please click to allow windows firewall, **Note** check the public network (bold check, all content is encrypted).
@@ -52,7 +57,7 @@ github：[Releases · WindSend](https://github.com/doraemonkeys/WindSend/release
 
 ### Mobile
 
-1. Install the APP (generally select app-armeabi-v8a-release.apk).
+1. Install the APP.
 2. Open the app and click the Add button to add a device.
 
    <img src="https://raw.githubusercontent.com/doraemonkeys/picture/master/1/202401242148381.png" alt="image-20240124214205549" style="zoom:50%;" />
@@ -75,6 +80,7 @@ Open the default configuration file `config.yaml`, copy secretKeyHex, and fill i
 ### Note
 
 - The time difference between the two devices cannot exceed 5 minutes, otherwise the pairing will fail.
+- Notification delivery on Windows relies on PowerShell, if you don't see notifications, check that PowerShell is in the environment variable.
 
 ## Tips
 
@@ -88,14 +94,13 @@ Open the default configuration file `config.yaml`, copy secretKeyHex, and fill i
 
 
 
-## Difference between Rust implementation and Go implementation?
+## Difference between Rust implementation and Go implementation
 
 The two versions are almost the same in function and appearance, but there are still slight differences in some aspects.
 
 1. The Rust version is relatively smaller in size
 2. The Rust version supports writing more types of images to the Windows clipboard
-3. The Rust version of the notification cannot display the icon
-4. The Rust version is slightly lower in transmission speed than the Go version
+3. The Rust version is slightly lower in transmission speed than the Go version
 
 
 ## Cross-platform situation
@@ -131,5 +136,38 @@ The server-side code is available in both Go and Rust, and the main libraries ar
 |         | Windows | macOS | Linux | Android | iOS  |
 | ------- | ------- | ----- | ----- | ------- | ---- |
 | Compile | ✅       | ❌     | ❌     | ❕       | ❕    |
-| Run     | ✅       | ❌     | ❌     | ❕       | ❕    |
+| Run     | ✅       |       |       | ❕       | ❕    |
 
+
+## Build
+
+### Flutter
+
+version: channel stable
+
+#### Requirements
+
+[Install Rust](https://www.rust-lang.org/tools/install)
+
+### Rust
+
+#### toolchain
+
+- **windows x86_64**
+
+  stable-x86_64-pc-windows-msvc
+
+- **windows aarch64**
+
+  aarch64-pc-windows-msvc
+
+#### Requirements
+
+[AWS Libcrypto for Rust User Guide](https://aws.github.io/aws-lc-rs/requirements/index.html)
+
+[workflows/rust_build.yml](https://github.com/doraemonkeys/WindSend/blob/main/.github/workflows/rust_build.yml)
+
+
+### Go
+
+version: 1.21+

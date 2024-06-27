@@ -1,9 +1,6 @@
-import 'dart:math';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_localization/flutter_localization.dart';
 
-import 'cnf.dart';
 import 'language.dart';
 import 'utils.dart';
 import 'device.dart';
@@ -25,21 +22,12 @@ enum SendTextMethod {
       SendTextMethod.values.map((e) => e.name).toList();
 }
 
-doSometing() async {
-  // await Future.delayed(const Duration(seconds: 2));
-  bool result = Random().nextBool();
-  await Future.delayed(const Duration(seconds: 1));
-  if (result) {
-    return;
-  } else {
-    throw Exception('this is a error');
-  }
-}
-
 class TextEditPage extends StatefulWidget {
   final Device device;
+  final void Function() onChanged;
 
-  const TextEditPage({super.key, required this.device});
+  const TextEditPage(
+      {super.key, required this.device, required this.onChanged});
   @override
   TextEditPageState createState() => TextEditPageState();
 }
@@ -51,7 +39,7 @@ class TextEditPageState extends State<TextEditPage> {
   // 发送方式
   late SendTextMethod _sendType;
   String msg = '';
-  late final String successMsg;
+  late String successMsg;
 
   // _handleSendStatus(Status status) {
   //   _isSendButtonReset = (status == Status.done);
@@ -68,11 +56,10 @@ class TextEditPageState extends State<TextEditPage> {
         });
       }
     });
-    _sendType = widget.device.iP != AppConfigModel.webIP
+    _sendType = widget.device.iP != Device.webIP
         ? SendTextMethod.p2p
         : SendTextMethod.web;
     _sendType = widget.device.actionPasteText ? _sendType : SendTextMethod.web;
-    successMsg = context.formatString(AppLocale.pasteSuccess, []);
     super.initState();
   }
 
@@ -84,6 +71,7 @@ class TextEditPageState extends State<TextEditPage> {
 
   @override
   Widget build(BuildContext context) {
+    successMsg = context.formatString(AppLocale.pasteSuccess, []);
     return Scaffold(
       appBar: AppBar(
         title: Row(
@@ -125,7 +113,8 @@ class TextEditPageState extends State<TextEditPage> {
               var success = true;
               try {
                 if (_sendType == SendTextMethod.p2p) {
-                  await DeviceItem.commonActionFunc(widget.device, (_) {}, () {
+                  await DeviceCard.commonActionFunc(
+                      widget.device, (_) => widget.onChanged(), () {
                     return widget.device
                         .doPasteTextAction(text: _controller.text)
                         .then((_) => successMsg);

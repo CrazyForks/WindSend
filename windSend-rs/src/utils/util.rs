@@ -1,6 +1,4 @@
 use std::borrow::Cow;
-
-use crate::PROGRAM_NAME;
 use tracing::error;
 
 pub struct StartHelper {
@@ -344,8 +342,12 @@ pub fn open_url(uri: &str) -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-pub fn inform<T: AsRef<str>>(content: T, title: &str) {
-    use notify_rust::Notification;
+pub fn inform<T: AsRef<str>>(
+    content: T,
+    title: &str,
+    #[cfg(target_os = "windows")] click_open: Option<&str>,
+    #[cfg(not(target_os = "windows"))] _: Option<&str>,
+) {
     let show_len = 80;
     let mut content_runes = content
         .as_ref()
@@ -360,14 +362,37 @@ pub fn inform<T: AsRef<str>>(content: T, title: &str) {
         content_runes.append(&mut vec!['.'; 3])
     }
     let body = content_runes.into_iter().collect::<String>();
-    Notification::new()
-        .summary(title)
-        .appname(PROGRAM_NAME)
-        .body(&body)
-        .icon(crate::config::APP_ICON_PATH.get().unwrap())
-        .show()
-        .map_err(|err| error!("show notification error: {}", err))
-        .ok();
+    #[cfg(not(target_os = "windows"))]
+    {
+        use notify_rust::Notification;
+        Notification::new()
+            .summary(title)
+            .appname(crate::PROGRAM_NAME)
+            .body(&body)
+            .icon(crate::config::APP_ICON_PATH.get().unwrap())
+            .show()
+            .map_err(|err| error!("show notification error: {}", err))
+            .ok();
+    }
+    #[cfg(target_os = "windows")]
+    {
+        use win_toast_notify::{CropCircle, Duration, WinToastNotify};
+        let mut notify = WinToastNotify::new()
+            // .set_app_id(crate::PROGRAM_NAME)
+            .set_logo(
+                crate::config::APP_ICON_PATH.get().unwrap(),
+                CropCircle::False,
+            )
+            .set_title(title)
+            .set_messages(vec![&body])
+            .set_duration(Duration::Short);
+        if let Some(click_open) = click_open {
+            notify = notify.set_notif_open(click_open);
+        }
+        if let Err(err) = notify.show() {
+            error!("show notification error: {}", err);
+        }
+    }
 }
 
 pub fn has_img_ext(name: &str) -> bool {
@@ -392,5 +417,45 @@ pub fn get_system_lang() -> String {
             break;
         }
     }
+    #[cfg(target_os = "windows")]
+    if lang.is_empty() {
+        if let Some(output) = std::process::Command::new("cmd")
+            .args(["/c", "chcp"])
+            .output()
+            .ok()
+        {
+            match String::from_utf8_lossy(&output.stdout) {
+                s if s.contains("936") => lang = "zh_CN".to_string(),
+                s if s.contains("437") => lang = "en_US".to_string(),
+                _ => {}
+            }
+        }
+    }
     lang
+}
+
+pub struct ClipboardManager {
+    lock: std::sync::Mutex<()>, // 用于确保同一时间只有一个线程尝试访问剪贴板
+}
+
+impl ClipboardManager {
+    pub fn new() -> Self {
+        Self {
+            lock: std::sync::Mutex::new(()),
+        }
+    }
+
+    pub fn with_clipboard<F, T, E>(&self, f: F) -> Result<T, String>
+    where
+        F: FnOnce(&mut arboard::Clipboard) -> Result<T, E>,
+        E: std::fmt::Debug,
+    {
+        let _guard = self
+            .lock
+            .lock()
+            .map_err(|e| format!("Failed to lock clipboard access: {}", e))?;
+        let mut clipboard = arboard::Clipboard::new()
+            .map_err(|e| format!("Failed to initialize clipboard: {}", e))?;
+        f(&mut clipboard).map_err(|e| format!("Failed to access clipboard: {:?}", e))
+    }
 }

@@ -1,10 +1,10 @@
 use crate::language::{LanguageKey, LANGUAGE_MANAGER};
 use crate::route::resp::{resp_common_error_msg, send_head, send_msg_with_body};
-use crate::route::{RouteDataType, RoutePathInfo, RouteRecvHead, RouteRespHead};
+use crate::route::{RouteDataType, RouteRecvHead, RouteRespHead, RouteTransferInfo};
 use std::path::PathBuf;
 use tokio::net::TcpStream;
 use tokio_rustls::server::TlsStream;
-use tracing::{debug, error, warn};
+use tracing::{debug, error, info, warn};
 
 pub async fn copy_handler(conn: &mut TlsStream<TcpStream>) {
     // 用户选择的文件
@@ -23,49 +23,46 @@ pub async fn copy_handler(conn: &mut TlsStream<TcpStream>) {
         let r = send_files(conn, files).await;
         if r.is_ok() {
             #[cfg(not(feature = "disable-systray-support"))]
-            crate::TX_RESET_FILES_ITEM
-                .get()
-                .unwrap()
-                .try_send(())
-                .unwrap();
+            crate::TX_RESET_FILES.get().unwrap().try_send(()).unwrap();
         }
         *crate::SELECTED_FILES.get().unwrap().lock().unwrap() = std::collections::HashSet::new();
         return;
     }
 
-    // 文件剪切板
-    #[cfg(not(target_os = "linux"))]
-    match clipboard_files::read() {
-        Ok(files) => {
-            let files = files.into_iter().map(|f| f.display().to_string());
-            let r = send_files(conn, files).await;
-            if r.is_ok() {
-                let r = crate::config::CLIPBOARD.lock().unwrap().clear();
-                if let Err(e) = r {
-                    error!("clear clipboard failed, err: {}", e);
+    // 文件剪切板(在读文本剪切板之前查看，文件地址可能会被当做文本读取到)
+    match clipboard_rs::ClipboardContext::new() {
+        Ok(cctx) => {
+            use clipboard_rs::Clipboard;
+            match cctx.get_files() {
+                Ok(files) => {
+                    let files = files
+                        .into_iter()
+                        .map(|f| f.trim_start_matches("file://").to_string())
+                        .collect::<Vec<_>>();
+                    if !files.is_empty() && send_files(conn, files).await.is_ok() {
+                        if let Err(e) = cctx.clear() {
+                            error!("clear clipboard failed, err: {}", e);
+                        }
+                        return;
+                    }
                 }
-                return;
+                Err(e) => debug!("clipboard_rs read failed, err: {:?}", e),
             }
         }
-        Err(e) => debug!("clipboard_files::read failed, err: {:?}", e),
+        Err(e) => error!("clipboard_rs new failed, err: {:?}", e),
     }
 
     {
-        let r1 = send_text(conn).await;
-        if r1.is_ok() {
-            return;
+        match send_clipboard_text(conn).await {
+            Ok(_) => return,
+            Err(e) => info!("send text failed, err: {}", e),
         }
-        let r2 = send_image(conn).await;
-        if r2.is_ok() {
-            return;
-        }
-        if let Err(e) = r1 {
-            warn!("send text failed, err: {}", e);
-        }
-        if let Err(e) = r2 {
-            warn!("send image failed, err: {}", e);
+        match send_clipboard_image(conn).await {
+            Ok(_) => return,
+            Err(e) => info!("send image failed, err: {}", e),
         }
     }
+
     let clipboard_is_empty = LANGUAGE_MANAGER
         .read()
         .unwrap()
@@ -78,18 +75,18 @@ async fn send_files<T: IntoIterator<Item = String>>(
     conn: &mut TlsStream<TcpStream>,
     paths: T,
 ) -> Result<(), ()> {
-    let mut resp_paths = Vec::<RoutePathInfo>::new();
+    let mut resp_paths = Vec::<RouteTransferInfo>::new();
     for path1 in paths {
         let path_attr = tokio::fs::metadata(&path1).await;
         let path_attr = match path_attr {
             Ok(attr) => attr,
             Err(err) => {
-                error!("get file attr failed, err: {}", err);
+                error!("get [{}] attr failed, err: {}", &path1, err);
                 continue;
             }
         };
-        let mut rpi: RoutePathInfo = RoutePathInfo {
-            path: path1.clone(),
+        let mut rpi: RouteTransferInfo = RouteTransferInfo {
+            remote_path: path1.clone(),
             ..Default::default()
         };
         if path_attr.is_file() {
@@ -104,7 +101,7 @@ async fn send_files<T: IntoIterator<Item = String>>(
             .unwrap_or_default()
             .to_string_lossy()
             .to_string();
-        rpi.save_path = dir_root.clone();
+        rpi.save_path.clone_from(&dir_root);
         resp_paths.push(rpi);
 
         static DEFAULT_SEPARATOR: &str = "/";
@@ -123,8 +120,8 @@ async fn send_files<T: IntoIterator<Item = String>>(
                 .display()
                 .to_string()
                 .replace(REVERSE_SEPARATOR, DEFAULT_SEPARATOR);
-            let mut rpi: RoutePathInfo = RoutePathInfo {
-                path: path2.clone(),
+            let mut rpi = RouteTransferInfo {
+                remote_path: path2.clone(),
                 type_: if entry.file_type().is_dir() {
                     crate::route::PathInfoType::Dir
                 } else {
@@ -179,12 +176,13 @@ async fn send_files<T: IntoIterator<Item = String>>(
     send_msg_with_body(conn, copy_successfully, RouteDataType::Files, &body).await
 }
 
-async fn send_image(conn: &mut TlsStream<TcpStream>) -> Result<(), Box<dyn std::error::Error>> {
+async fn send_clipboard_image(
+    conn: &mut TlsStream<TcpStream>,
+) -> Result<(), Box<dyn std::error::Error>> {
     let image_name = chrono::Local::now().format("%Y%m%d%H%M%S").to_string() + ".png";
-    let raw_image = crate::config::CLIPBOARD.lock().unwrap().get_image();
+    let raw_image = crate::config::CLIPBOARD.with_clipboard(|clipboard| clipboard.get_image());
     if let Err(err) = raw_image {
-        let info = format!("{}", err);
-        return Err(info.into());
+        return Err(err.into());
     }
     let raw_image = raw_image.unwrap();
     let img_buf = image::ImageBuffer::from_vec(
@@ -207,13 +205,8 @@ async fn send_image(conn: &mut TlsStream<TcpStream>) -> Result<(), Box<dyn std::
     Ok(())
 }
 
-async fn send_text(conn: &mut TlsStream<TcpStream>) -> Result<(), String> {
-    let data_text = crate::config::CLIPBOARD.lock().unwrap().get_text();
-    if let Err(e) = data_text {
-        let info = format!("{}", e);
-        return Err(info);
-    }
-    let data_text = data_text.unwrap();
+async fn send_clipboard_text(conn: &mut TlsStream<TcpStream>) -> Result<(), String> {
+    let data_text = crate::config::CLIPBOARD.with_clipboard(|clipboard| clipboard.get_text())?;
     send_msg_with_body(
         conn,
         &"".to_string(),

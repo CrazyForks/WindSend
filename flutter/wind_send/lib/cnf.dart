@@ -17,6 +17,8 @@ import 'device.dart';
 class AppSharedCnfService {
   static const String _fileSavePathKey = 'FileSavePath';
   static const String _imageSavePathKey = 'ImageSavePath';
+  static const String _defaultShareDeviceKey = 'DefaultShareDevice';
+  static const String _defaultSyncDeviceKey = 'DefaultSyncDevice';
 
   //保持一个SharedPreferences的引用
   static late final SharedPreferences _sp;
@@ -66,7 +68,7 @@ class AppSharedCnfService {
       switch (defaultTargetPlatform) {
         case TargetPlatform.android:
           fileSavePath = '/storage/emulated/0/Download/WindSend';
-          await Directory(fileSavePath).create(recursive: true);
+          // await Directory(fileSavePath).create(recursive: true); // 可能没有权限
           break;
         default:
           fileSavePath = "./";
@@ -97,7 +99,7 @@ class AppSharedCnfService {
       switch (defaultTargetPlatform) {
         case TargetPlatform.android:
           imageSavePath = '/storage/emulated/0/Pictures/WindSend';
-          await Directory(imageSavePath).create(recursive: true);
+          // await Directory(imageSavePath).create(recursive: true);
           break;
         default:
           imageSavePath = "./";
@@ -207,14 +209,27 @@ class AppSharedCnfService {
       _sp.setString('DefaultSelectDevice', value!);
 
   /// 默认同步设备
-  static String? get defaultSyncDevice => _sp.getString('DefaultSyncDevice');
-  static set defaultSyncDevice(String? value) =>
-      _sp.setString('DefaultSyncDevice', value!);
+  static String? get defaultSyncDevice => _sp.getString(_defaultSyncDeviceKey);
+  static set defaultSyncDevice(String? value) => value == null
+      ? _sp.remove(_defaultSyncDeviceKey)
+      : _sp.setString(_defaultSyncDeviceKey, value);
 
   /// 默认分享设备
-  static String? get defaultShareDevice => _sp.getString('DefaultShareDevice');
-  static set defaultShareDevice(String? value) =>
-      _sp.setString('DefaultShareDevice', value!);
+  static String? get defaultShareDevice {
+    var value = _sp.getString(_defaultShareDeviceKey);
+    if (value != null) {
+      return value;
+    }
+    if (devices != null && devices!.isNotEmpty) {
+      _sp.setString(_defaultShareDeviceKey, devices!.first.targetDeviceName);
+      return devices!.first.targetDeviceName;
+    }
+    return null;
+  }
+
+  static set defaultShareDevice(String? value) => value == null
+      ? _sp.remove(_defaultShareDeviceKey)
+      : _sp.setString(_defaultShareDeviceKey, value);
 
   /// 文件保存路径
   static String get fileSavePath => _sp.getString(_fileSavePathKey)!;
@@ -329,7 +344,7 @@ class AppSharedCnfService {
 
 // class AppConfigModel with ChangeNotifier
 class AppConfigModel {
-  static const String webIP = 'web';
+  // static const String webIP = 'web';
   String _deviceName = AppSharedCnfService.deviceName!;
   String? _defaultSyncDevice = AppSharedCnfService.defaultSyncDevice;
   String? _defaultShareDevice = AppSharedCnfService.defaultShareDevice;

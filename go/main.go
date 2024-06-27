@@ -2,6 +2,7 @@ package main
 
 import (
 	"crypto/tls"
+	"net"
 	"runtime"
 
 	"github.com/sirupsen/logrus"
@@ -11,8 +12,7 @@ var crypter *CbcAESCrypt
 
 const ProgramName = "WindSend-S-Go"
 const ProgramUrl = "https://github.com/doraemonkeys/WindSend"
-const AboutProgram = `WindSend is a cross-platform clipboard synchronization and file transfer tool, which is easy to use and supports clipboard synchronization and file transfer between different platforms. It is based on the principle of P2P transmission, and the transmission speed is fast and stable. It is a good helper for cross-platform clipboard synchronization and file transfer.`
-const ProgramVersion = "1.1.1"
+const ProgramVersion = "1.3.0"
 
 func init() {
 	InitGlobalLogger()
@@ -55,7 +55,9 @@ func runRoute() {
 		logrus.Panic(err)
 		return
 	}
-	defer listener.Close()
+	defer func(listener net.Listener) {
+		_ = listener.Close()
+	}(listener)
 	for {
 		conn, err := listener.Accept()
 		if err != nil {

@@ -2,7 +2,7 @@ use crate::utils;
 use image::EncodableLayout;
 use lazy_static::lazy_static;
 use serde::{Deserialize, Serialize};
-use std::sync::Mutex;
+use std::sync::{Mutex, RwLock};
 use std::{path::Path, str::FromStr};
 use tracing::{debug, error, warn};
 
@@ -19,14 +19,13 @@ lazy_static! {
         utils::StartHelper::new(crate::PROGRAM_NAME.to_string());
 }
 lazy_static! {
-    pub static ref GLOBAL_CONFIG: Mutex<Config> = Mutex::new(init_global_config());
+    pub static ref GLOBAL_CONFIG: RwLock<Config> = RwLock::new(init_global_config());
 }
 lazy_static! {
     pub static ref LOG_LEVEL: tracing::Level = tracing::Level::INFO;
 }
 lazy_static! {
-    pub static ref CLIPBOARD: Mutex<arboard::Clipboard> =
-        Mutex::new(arboard::Clipboard::new().unwrap());
+    pub static ref CLIPBOARD: utils::ClipboardManager = utils::ClipboardManager::new();
 }
 lazy_static! {
     pub static ref ALLOW_TO_BE_SEARCHED: Mutex<bool> = Mutex::new(false);
@@ -34,7 +33,7 @@ lazy_static! {
 
 pub fn get_cryptor() -> Result<utils::encrypt::AESCbcFollowedCrypt, Box<dyn std::error::Error>> {
     let cryptor = utils::encrypt::AESCbcFollowedCrypt::new(
-        hex::decode(GLOBAL_CONFIG.lock()?.secret_key_hex.clone())?.as_bytes(),
+        hex::decode(GLOBAL_CONFIG.read()?.secret_key_hex.clone())?.as_bytes(),
     )?;
     Ok(cryptor)
 }
@@ -279,9 +278,7 @@ pub async fn set_clipboard_from_img_bytes(bytes: &[u8]) -> Result<(), ()> {
         bytes: Cow::from(rgba8_img.into_bytes()),
     };
     crate::config::CLIPBOARD
-        .lock()
-        .map_err(|e| error!("get clipboard lock failed, err: {}", e))?
-        .set_image(img_data)
+        .with_clipboard(|clipboard| clipboard.set_image(img_data))
         .map_err(|e| error!("set clipboard image failed, err: {}", e))?;
     Ok(())
 }

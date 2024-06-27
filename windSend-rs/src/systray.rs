@@ -114,7 +114,7 @@ fn loop_systray(mr: MenuReceiver) -> ReturnCode {
         LANGUAGE_MANAGER.read().unwrap().get_language() == Language::EN,
         None,
     );
-    let auto_start = config::GLOBAL_CONFIG.lock().unwrap().auto_start;
+    let auto_start = config::GLOBAL_CONFIG.read().unwrap().auto_start;
     let auto_start_i = CheckMenuItem::new(
         LANGUAGE_MANAGER
             .read()
@@ -218,8 +218,8 @@ fn loop_systray(mr: MenuReceiver) -> ReturnCode {
         &sub_menu_lang,
         #[cfg(not(target_os = "linux"))]
         &auto_start_i,
-        &PredefinedMenuItem::separator(),
         &allow_to_be_search_i,
+        &PredefinedMenuItem::separator(),
         &open_url_i,
         &about_i,
         &quit_i,
@@ -362,7 +362,7 @@ fn loop_systray(mr: MenuReceiver) -> ReturnCode {
                 }
                 id if id == sub_hide_forever_i.id() => {
                     {
-                        let mut config = config::GLOBAL_CONFIG.lock().unwrap();
+                        let mut config = config::GLOBAL_CONFIG.write().unwrap();
                         config.show_systray_icon = false;
                         if let Err(err) = config.save() {
                             error!("save config error: {}", err);
@@ -372,7 +372,7 @@ fn loop_systray(mr: MenuReceiver) -> ReturnCode {
                 }
                 id if id == lang_zh_i.id() => {
                     {
-                        let mut config = config::GLOBAL_CONFIG.lock().unwrap();
+                        let mut config = config::GLOBAL_CONFIG.write().unwrap();
                         config.language = Language::ZH;
                         if let Err(err) = config.save_and_set() {
                             error!("save config error: {}", err);
@@ -385,7 +385,7 @@ fn loop_systray(mr: MenuReceiver) -> ReturnCode {
                 }
                 id if id == lang_en_i.id() => {
                     {
-                        let mut config = config::GLOBAL_CONFIG.lock().unwrap();
+                        let mut config = config::GLOBAL_CONFIG.write().unwrap();
                         config.language = Language::EN;
                         if let Err(err) = config.save_and_set() {
                             error!("save config error: {}", err);
@@ -415,7 +415,7 @@ fn loop_systray(mr: MenuReceiver) -> ReturnCode {
                     r.spawn(handle_menu_event_copy_from_web());
                 }
                 id if id == auto_start_i.id() => {
-                    let mut config = config::GLOBAL_CONFIG.lock().unwrap();
+                    let mut config = config::GLOBAL_CONFIG.write().unwrap();
                     config.auto_start = !config.auto_start;
                     if let Err(err) = config.save_and_set() {
                         error!("save config error: {}", err);
@@ -487,7 +487,7 @@ async fn handle_menu_event_save_path() {
             return;
         }
     };
-    let mut config = config::GLOBAL_CONFIG.lock().unwrap();
+    let mut config = config::GLOBAL_CONFIG.write().unwrap();
     config.save_path = path.path().to_str().unwrap().to_string();
     debug!("change save path to: {}", config.save_path);
     if let Err(err) = config.save_and_set() {
@@ -496,7 +496,7 @@ async fn handle_menu_event_save_path() {
 }
 
 async fn handle_menu_event_paste_to_web() {
-    let clipboard_text = config::CLIPBOARD.lock().unwrap().get_text();
+    let clipboard_text = config::CLIPBOARD.with_clipboard(|clipboard| clipboard.get_text());
     if let Err(e) = clipboard_text {
         error!("get clipboard text error: {}", e);
         utils::inform(
@@ -505,6 +505,7 @@ async fn handle_menu_event_paste_to_web() {
                 .unwrap()
                 .translate(LanguageKey::ClipboardNotText),
             PROGRAM_NAME,
+            None,
         );
         return;
     }
@@ -519,6 +520,7 @@ async fn handle_menu_event_paste_to_web() {
                 .unwrap()
                 .translate(LanguageKey::PasteToWebFailed),
             PROGRAM_NAME,
+            None,
         );
         return;
     }
@@ -528,6 +530,7 @@ async fn handle_menu_event_paste_to_web() {
             .unwrap()
             .translate(LanguageKey::PasteToWebSuccess),
         PROGRAM_NAME,
+        Some(&web::MY_URL),
     );
 }
 
@@ -541,6 +544,7 @@ async fn handle_menu_event_copy_from_web() {
                 .unwrap()
                 .translate(LanguageKey::CopyFromWebFailed),
             PROGRAM_NAME,
+            None,
         );
         return;
     }
@@ -552,12 +556,12 @@ async fn handle_menu_event_copy_from_web() {
     }
     let content = content.unwrap();
     debug!("content: {}", content);
-    let result = config::CLIPBOARD.lock().unwrap().set_text(&content);
+    let result = config::CLIPBOARD.with_clipboard(|clipboard| clipboard.set_text(&content));
     if let Err(e) = result {
         error!("set clipboard text error: {}", e);
         return;
     }
-    utils::inform(&content, PROGRAM_NAME);
+    utils::inform(&content, PROGRAM_NAME, None);
 }
 
 fn handle_menu_event_clear_files(add_item: &MenuItem, clear_item: &MenuItem) {

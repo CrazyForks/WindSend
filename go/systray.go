@@ -46,7 +46,7 @@ func onReady(quitch chan bool) {
 	systray.SetTitle(ProgramName)
 	systray.SetTooltip(ProgramName + " " + ProgramVersion)
 
-	var filesNum int = 0
+	var filesNum = 0
 
 	// 添加菜单项
 	mAddFils := systray.AddMenuItem(language.Translate(language.AddFiles)+" - 0",
@@ -200,6 +200,7 @@ func onReady(quitch chan bool) {
 			}
 
 		case <-mPasteToWeb.ClickedCh:
+			clipboarDataType, clipboardWatchData := clipboardData.Get()
 			if clipboarDataType != clipboardWatchDataTypeText {
 				Inform(language.Translate(language.ClipboardNotText), ProgramName)
 			} else if clipboarDataType == clipboardWatchDataTypeText {

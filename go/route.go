@@ -24,17 +24,9 @@ const TimeFormat = "2006-01-02 15:04:05"
 const MaxTimeDiff float64 = 300
 
 const (
-	// 服务器内部错误
-	ErrorInternal = "internal error"
-	// 无效的验证数据
-	ErrorInvalidAuthData = "invalid auth data"
-	// 过期的验证数据
-	ErrorExpiredAuthData = "expired auth data"
-	// 剪切板数据过大
-	ErrorClipboardDataTooLarge = "clipboard data too large"
-	// 损坏的数据
+	// ErrorInvalidData 损坏的数据
 	ErrorInvalidData = "invalid data"
-	// 不完整的数据
+	// ErrorIncompleteData 不完整的数据
 	ErrorIncompleteData = "incomplete data"
 )
 
@@ -45,6 +37,7 @@ const (
 	pingAction      = "ping"
 	downloadAction  = "download"
 	matchAction     = "match"
+	syncTextAction  = "syncText"
 	webIp           = "web"
 )
 
@@ -78,12 +71,12 @@ type RespHead struct {
 	// Paths   []pathInfo `json:"paths"`
 }
 
-type pathInfo struct {
+type transferInfo struct {
 	// dir or file
-	Type     pathInfoType `json:"type"`
-	Path     string       `json:"path"`
-	SavePath string       `json:"savePath"`
-	Size     int64        `json:"size"`
+	Type       pathInfoType `json:"type"`
+	RemotePath string       `json:"path"`
+	SavePath   string       `json:"savePath"`
+	Size       int64        `json:"size"`
 }
 
 type pathInfoType = string
@@ -118,7 +111,9 @@ func mainProcess(conn net.Conn) {
 		}
 	}()
 	logrus.Info("remote addr:", conn.RemoteAddr().String())
-	defer conn.Close()
+	defer func(conn net.Conn) {
+		_ = conn.Close()
+	}(conn)
 
 	for {
 		head, ok := commonAuth(conn)
@@ -143,6 +138,8 @@ func mainProcess(conn net.Conn) {
 		case matchAction:
 			matchHandler(conn)
 			return
+		case syncTextAction:
+			syncTextHandler(conn, head)
 		default:
 			respCommonError(conn, "unknown action:"+head.Action)
 			logrus.Error("unknown action:", head.Action)
@@ -182,6 +179,30 @@ func pasteTextHandler(conn net.Conn, head headInfo) {
 		Inform(string(contentRune), head.DeviceName)
 	}
 	<-completionSignal
+}
+
+func syncTextHandler(conn net.Conn, head headInfo) {
+	var curClipboardText = make([]byte, 0)
+	clipboarDataType, clipboardWatchData := clipboardData.Get()
+	if clipboarDataType == clipboardWatchDataTypeText {
+		curClipboardText = clipboardWatchData
+	}
+	if head.DataLen > 0 {
+		var bodyBuf = make([]byte, head.DataLen)
+		_, err := io.ReadFull(conn, bodyBuf)
+		if err != nil {
+			// logrus.Error("read body error: ", err)
+			logrus.Errorf("read body error: %v, dataLen:%d, bodyBuf:%s\n", err, head.DataLen, string(bodyBuf))
+			logrus.Info("head:", head)
+			respCommonError(conn, ErrorIncompleteData+": "+err.Error())
+			return
+		}
+		// 与当前剪贴板内容相同则不设置，避免触发剪贴板变化事件
+		if string(bodyBuf) != string(curClipboardText) {
+			clipboard.Write(clipboard.FmtText, bodyBuf)
+		}
+	}
+	var _ = sendMsgWithBody(conn, "SyncSuccess", DataTypeText, curClipboardText)
 }
 
 func pingHandler(conn net.Conn, head headInfo) {
@@ -291,9 +312,11 @@ func commonAuth(conn net.Conn) (headInfo, bool) {
 		respError(conn, unauthorizedCode, err.Error())
 		return head, false
 	}
-	if time.Since(t).Seconds() > MaxTimeDiff {
-		logrus.Info("time expired: ", t.String())
-		respError(conn, unauthorizedCode, "time expired: "+t.String())
+	now := time.Now()
+	if now.Sub(t).Seconds() > MaxTimeDiff {
+		msg := fmt.Sprintf("time expired! received time: %s, local time: %s", t.String(), now.Format(TimeFormat))
+		logrus.Debugln(msg)
+		respError(conn, unauthorizedCode, msg)
 		return head, false
 	}
 
@@ -367,6 +390,8 @@ func copyHandler(conn net.Conn) {
 		return
 	}
 
+	clipboarDataType, _ := clipboardData.Get()
+
 	// 空剪切板
 	if clipboarDataType == clipboardWatchDataEmpty {
 		respCommonError(conn, language.Translate(language.ClipboardIsEmpty))
@@ -388,7 +413,7 @@ func copyHandler(conn net.Conn) {
 
 func sendFiles(conn net.Conn) error {
 	// resp.Paths = SelectedFiles
-	var respPaths = make([]pathInfo, 0, len(SelectedFiles))
+	var respPaths = make([]transferInfo, 0, len(SelectedFiles))
 	for _, path1 := range SelectedFiles {
 		path1 = strings.ReplaceAll(path1, "\\", "/")
 		fInfo, err := os.Stat(path1)
@@ -397,8 +422,8 @@ func sendFiles(conn net.Conn) error {
 			respCommonError(conn, err.Error())
 			return err
 		}
-		var pi pathInfo
-		pi.Path = path1
+		var pi transferInfo
+		pi.RemotePath = path1
 		if !fInfo.IsDir() {
 			pi.Type = pathInfoTypeFile
 			pi.Size = fInfo.Size()
@@ -416,8 +441,8 @@ func sendFiles(conn net.Conn) error {
 				return err
 			}
 			path2 = strings.ReplaceAll(path2, "\\", "/")
-			var pi pathInfo
-			pi.Path = path2
+			var pi transferInfo
+			pi.RemotePath = path2
 			pi.Type = pathInfoTypeDir
 			pi.SavePath = filepath.Join(filepath.Base(path1), strings.TrimPrefix(path2, path1))
 			if !info.IsDir() {
@@ -445,10 +470,12 @@ func sendFiles(conn net.Conn) error {
 
 func sendImage(conn net.Conn) {
 	imageName := time.Now().Format("20060102150405") + ".png"
+	_, clipboardWatchData := clipboardData.Get()
 	_ = sendMsgWithBody(conn, imageName, DataTypeClipImage, clipboardWatchData)
 }
 
 func sendText(conn net.Conn) {
+	_, clipboardWatchData := clipboardData.Get()
 	_ = sendMsgWithBody(conn, "", DataTypeText, clipboardWatchData)
 }
 

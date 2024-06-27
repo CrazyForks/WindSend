@@ -29,11 +29,15 @@
 
 github：[Releases · WindSend](https://github.com/doraemonkeys/WindSend/releases)
 
+> PC端: 一般可以选择下载 **WindSend-S**-XX-x86_64-XXXXX.zip (提供Rust与Go两种实现)
+> 
+> 移动端：一般可以选择下载 **WindSend-flutter**-arm64-v8a-release.apk
+
 
 
 ### PC端
 
-1. 解压 **WindSend-S-XX-amd64-windows.zip** 到任意目录(提供Rust与Go两种实现) 。
+1. 解压 **WindSend-S-XX-x86_64-windows.zip** 到任意目录(以Windows为例)。
 
 2. 双击exe文件运行：
 
@@ -55,7 +59,7 @@ github：[Releases · WindSend](https://github.com/doraemonkeys/WindSend/release
 
 ### 移动端
 
-1. 安装APP(一般选 app-armeabi-v8a-release.apk)。
+1. 安装APP。
 2. 打开APP，点击右下角的加号配置。
 
 
@@ -80,8 +84,8 @@ github：[Releases · WindSend](https://github.com/doraemonkeys/WindSend/release
 
 ### 注意事项
 
-1. 一直转圈圈说明你电脑端配置有问题，比如wifi设置为公用网络。
-2. 两个设备之间的时间差不能超过5分钟，否则会导致配对失败。
+- 两个设备之间的时间差不能超过5分钟，否则会导致配对失败。
+- Windows上的通知发送依赖于PowerShell，如果你没有看到通知，请检查PowerShell是否在环境变量中。
 
 
 
@@ -125,15 +129,13 @@ web传递信息的原理是使用了 https://ko0.com/ 网站。
 
 
 
-## Rust实现与Go实现有哪些区别？
+## Rust实现与Go实现有哪些区别
 
 这两个版本在在功能与外观上几乎没有区别，但某些方面还是有细微差别。
 
 
 1. Rust版体积相对稍小
-2. Rust版支持将更多种类图片写入Windows剪切板
-3. Rust版通知不能显示图标
-4. Rust版在传输速度上比Go版略低
+2. Rust版在传输速度上比Go版略低
 
 
 
@@ -170,5 +172,38 @@ web传递信息的原理是使用了 https://ko0.com/ 网站。
 |          | Windows | macOS | Linux | Android | iOS  |
 | -------- | ------- | ----- | ----- | ------- | ---- |
 | 能否编译 | ✅       | ❌     | ❌     | ❕       | ❕    |
-| 正常运行 | ✅       | ❌     | ❌     | ❕       | ❕    |
+| 正常运行 | ✅       |       |       | ❕       | ❕    |
 
+## 构建指南
+
+### Flutter
+
+version: channel stable
+
+#### Requirements
+
+[Install Rust](https://www.rust-lang.org/tools/install)
+
+### Rust
+
+#### toolchain
+
+- **windows x86_64**
+
+  stable-x86_64-pc-windows-msvc
+
+- **windows aarch64**
+
+  aarch64-pc-windows-msvc
+
+#### Requirements
+
+[AWS Libcrypto for Rust User Guide](https://aws.github.io/aws-lc-rs/requirements/index.html)
+
+[.github/workflows/rust_build.yml](https://github.com/doraemonkeys/WindSend/blob/main/.github/workflows/rust_build.yml)
+
+
+
+### Go
+
+version: 1.21+
