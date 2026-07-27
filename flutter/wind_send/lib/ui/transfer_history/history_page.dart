@@ -13,6 +13,7 @@ import '../../db/shared_preferences/cnf.dart';
 import '../../device.dart';
 import '../../language.dart';
 import 'history.dart';
+import 'history_date_section.dart';
 import 'history_filter.dart' hide FilterDeviceInfo;
 import 'history_item_card.dart';
 import 'history_search.dart';
@@ -101,60 +102,6 @@ class _AnimatedListItemState extends State<_AnimatedListItem>
       opacity: _fadeAnimation,
       child: SlideTransition(position: _slideAnimation, child: widget.child),
     );
-  }
-}
-
-// =============================================================================
-// Sticky Group Header Delegate
-// =============================================================================
-
-/// Delegate for sticky date group headers (Section 5.2)
-class _StickyHeaderDelegate extends SliverPersistentHeaderDelegate {
-  final String title;
-  final Color backgroundColor;
-  final Color textColor;
-
-  static const double _height = 40.0;
-
-  _StickyHeaderDelegate({
-    required this.title,
-    required this.backgroundColor,
-    required this.textColor,
-  });
-
-  @override
-  double get minExtent => _height;
-
-  @override
-  double get maxExtent => _height;
-
-  @override
-  Widget build(
-    BuildContext context,
-    double shrinkOffset,
-    bool overlapsContent,
-  ) {
-    return Container(
-      height: _height,
-      color: backgroundColor,
-      padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
-      alignment: Alignment.centerLeft,
-      child: Text(
-        title,
-        style: TextStyle(
-          fontSize: 14,
-          fontWeight: FontWeight.w600,
-          color: textColor,
-        ),
-      ),
-    );
-  }
-
-  @override
-  bool shouldRebuild(covariant _StickyHeaderDelegate oldDelegate) {
-    return title != oldDelegate.title ||
-        backgroundColor != oldDelegate.backgroundColor ||
-        textColor != oldDelegate.textColor;
   }
 }
 
@@ -1780,24 +1727,16 @@ class _HistoryPageState extends State<HistoryPage>
     int globalIndex = 0;
 
     for (final group in groups) {
-      // Sticky header
+      final groupStartIndex = globalIndex;
       slivers.add(
-        SliverPersistentHeader(
-          pinned: true,
-          delegate: _StickyHeaderDelegate(
-            title: group.title,
-            backgroundColor: colorScheme.surface,
-            textColor: colorScheme.onSurfaceVariant,
-          ),
-        ),
-      );
-
-      // Items in this group
-      slivers.add(
-        SliverList(
-          delegate: SliverChildBuilderDelegate((context, index) {
+        SliverHistoryDateSection(
+          key: ValueKey(group.title),
+          title: group.title,
+          headerBackgroundColor: colorScheme.surface,
+          headerForegroundColor: colorScheme.onSurfaceVariant,
+          itemDelegate: SliverChildBuilderDelegate((context, index) {
             final item = group.items[index];
-            final itemIndex = globalIndex + index;
+            final itemIndex = groupStartIndex + index;
             return _AnimatedListItem(
               index: itemIndex,
               delay: Duration(milliseconds: 30 * (itemIndex % 10)),
