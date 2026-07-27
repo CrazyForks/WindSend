@@ -72,7 +72,7 @@ void main() {
     });
 
     test(
-      'primes last observed clipboard state on start to suppress same-state recopy',
+      'sends the primed clipboard once and suppresses its watcher echo',
       () async {
         final watcher = _FakeWatcher();
         final hub = InMemoryClipboardEventHub(watcher: watcher);
@@ -116,6 +116,10 @@ void main() {
         );
 
         await session.start();
+        expect(transport.sentFrames, hasLength(2));
+        expect(transport.sentFrames.first.head, isA<SubscribeSyncFrameHead>());
+        expect(transport.sentFrames.last.head, isA<EventSyncFrameHead>());
+
         watcher.emit(
           ClipboardSnapshot.observed(
             payload: ClipboardPayload.text(
@@ -127,8 +131,13 @@ void main() {
         );
         await _pump();
 
-        expect(transport.sentFrames, hasLength(1));
-        expect(transport.sentFrames.single.head, isA<SubscribeSyncFrameHead>());
+        expect(transport.sentFrames, hasLength(2));
+        expect(
+          transport.sentFrames.where(
+            (frame) => frame.head is EventSyncFrameHead,
+          ),
+          hasLength(1),
+        );
 
         await session.close();
       },
