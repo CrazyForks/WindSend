@@ -7,8 +7,10 @@ import 'package:intl/intl.dart';
 import 'package:path/path.dart' as p;
 
 import '../../language.dart';
+import '../../utils/file_manager.dart';
 import '../../utils/utils.dart';
 import 'history.dart';
+import 'history_file_manager.dart';
 import 'image_preview_dialog.dart';
 
 // =============================================================================
@@ -450,32 +452,22 @@ class HistoryDetailDialog extends StatelessWidget {
         );
       }
     } else {
-      // Open file location
-      final filesPayload = item.filesPayload;
-      if (filesPayload.isNotEmpty) {
-        final path = filesPayload.firstFile?.path;
-        if (path != null && path.isNotEmpty) {
-          String targetPath = path;
-          if (!p.isAbsolute(path)) {
-            try {
-              targetPath = await toAbsolutePayloadPath(path);
-            } catch (_) {}
-          }
-
-          final success = await openInFileManager(targetPath);
-          if (!success && context.mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text(
-                  context.formatString(AppLocale.historyDetailFileInfoUnavailable, []),
-                ),
-                behavior: SnackBarBehavior.floating,
+      final target = await resolveHistoryFileManagerTarget(item);
+      final success = target != null && await openInFileManager(target);
+      if (!success && context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              context.formatString(
+                AppLocale.historyDetailFileInfoUnavailable,
+                [],
               ),
-            );
-          } else if (context.mounted) {
-            Navigator.pop(context);
-          }
-        }
+            ),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      } else if (context.mounted) {
+        Navigator.pop(context);
       }
     }
   }

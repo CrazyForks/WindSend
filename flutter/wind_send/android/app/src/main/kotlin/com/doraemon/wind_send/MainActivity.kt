@@ -12,6 +12,7 @@ class MainActivity: FlutterActivity() {
     private lateinit var clipboardHandler: ClipboardHandler
     private lateinit var uriRandomAccessHandler: UriRandomAccessHandler
     private lateinit var uriInfoHandler: UriInfoHandler
+    private lateinit var fileManagerHandler: FileManagerHandler
 
     override fun configureFlutterEngine(@NonNull flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
@@ -20,6 +21,7 @@ class MainActivity: FlutterActivity() {
         clipboardHandler = ClipboardHandler(this)
         uriRandomAccessHandler = UriRandomAccessHandler(this)
         uriInfoHandler = UriInfoHandler(this)
+        fileManagerHandler = FileManagerHandler(this)
 
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "com.doraemon.wind_send/file_picker")
             .setMethodCallHandler { call, result -> 
@@ -39,6 +41,11 @@ class MainActivity: FlutterActivity() {
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "com.doraemon.wind_send/uri")
             .setMethodCallHandler { call, result -> 
                 uriInfoHandler.handleMethodCall(call, result) 
+            }
+
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "com.doraemon.wind_send/file_manager")
+            .setMethodCallHandler { call, result ->
+                fileManagerHandler.handleMethodCall(call, result)
             }
     }
 

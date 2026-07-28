@@ -6,9 +6,11 @@ import 'package:flutter_localization/flutter_localization.dart';
 import 'package:intl/intl.dart';
 
 import '../../language.dart';
+import '../../utils/file_manager.dart';
 import '../../utils/utils.dart';
 import '../../toast.dart';
 import 'history.dart';
+import 'history_file_manager.dart';
 import 'image_preview_dialog.dart';// =============================================================================
 // Type Aliases for Callbacks
 // =============================================================================
@@ -172,19 +174,8 @@ class _HistoryItemCardState extends State<HistoryItemCard>
   }
 
   Future<void> _openInFileManager() async {
-    String? filePath;
-
-    if (widget.item.payloadPath != null &&
-        widget.item.payloadPath!.isNotEmpty) {
-      filePath = widget.item.payloadPath;
-    } else {
-      final files = widget.item.filesPayload.files;
-      if (files.isNotEmpty && files.first.path.isNotEmpty) {
-        filePath = files.first.path;
-      }
-    }
-
-    if (filePath == null || filePath.isEmpty) {
+    final target = await resolveHistoryFileManagerTarget(widget.item);
+    if (target == null) {
       if (!mounted) return;
       ToastResult(
         message: context.formatString(AppLocale.filePathUnavailable, []),
@@ -193,7 +184,7 @@ class _HistoryItemCardState extends State<HistoryItemCard>
       return;
     }
 
-    final success = await openInFileManager(filePath);
+    final success = await openInFileManager(target);
     if (!mounted) return;
 
     if (!success) {
