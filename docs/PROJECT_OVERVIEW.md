@@ -14,7 +14,8 @@ Flutter app for secure clipboard sync and file transfer between devices.
 
 **Core Features:**
 - Text/image clipboard sync and file/folder transfer over TLS
-- Device-centric model with automatic LAN discovery (IP range scanning)
+- Device-centric model with automatic LAN discovery, directed pairing, and
+  complete manual connection setup
 - Relay server support for cross-network/NAT traversal scenarios
 
 **Architecture:**
@@ -27,7 +28,8 @@ Flutter app for secure clipboard sync and file transfer between devices.
 |--------|---------|
 | `device.dart` | Device model and management |
 | `file_transfer.dart` | Connection pooling, upload/download |
-| `device_discovery.dart` | LAN scanning |
+| `device_discovery.dart` | LAN scanning and endpoint pairing |
+| `ui/device_pairing/` | Add-device pairing modes and interaction state |
 | `protocol/` | Binary protocol, encryption |
 | `clipboard/` | Cross-platform clipboard via `super_clipboard` |
 | `web.dart` | Optional web-based clipboard sync |

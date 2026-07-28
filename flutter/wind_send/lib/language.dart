@@ -41,6 +41,27 @@ mixin AppLocale {
   static const String cannotBeEmpty = 'cannotBeEmpty';
   static const String mustBeNumber = 'mustBeNumber';
   static const String findAvailableDevice = 'findAvailableDevice';
+  static const String pairingAutomatic = 'pairingAutomatic';
+  static const String pairingDirect = 'pairingDirect';
+  static const String pairingManual = 'pairingManual';
+  static const String quickPairInstruction = 'quickPairInstruction';
+  static const String quickPairOneShotHint = 'quickPairOneShotHint';
+  static const String startDeviceDiscovery = 'startDeviceDiscovery';
+  static const String scanningDevices = 'scanningDevices';
+  static const String deviceAddress = 'deviceAddress';
+  static const String deviceAddressHint = 'deviceAddressHint';
+  static const String devicePort = 'devicePort';
+  static const String connectAndFetchCredentials = 'connectAndFetchCredentials';
+  static const String connectingToDevice = 'connectingToDevice';
+  static const String pairingCredentialsReady = 'pairingCredentialsReady';
+  static const String pairingNoLocalNetwork = 'pairingNoLocalNetwork';
+  static const String pairingNoDeviceFound = 'pairingNoDeviceFound';
+  static const String pairingConnectionFailed = 'pairingConnectionFailed';
+  static const String pairingRejected = 'pairingRejected';
+  static const String pairingProtocolFailed = 'pairingProtocolFailed';
+  static const String manualConfigurationHint = 'manualConfigurationHint';
+  static const String showSecretKey = 'showSecretKey';
+  static const String hideSecretKey = 'hideSecretKey';
   static const String operationSuccess = 'operationSuccess';
   static const String shareFailed = 'shareFailed';
   static const String shareSuccess = 'shareSuccess';
@@ -231,8 +252,7 @@ mixin AppLocale {
   static const String csBackgroundListenerEnabled =
       'csBackgroundListenerEnabled';
   static const String csAndroidWatcherActive = 'csAndroidWatcherActive';
-  static const String csWaitingOverlayPermission =
-      'csWaitingOverlayPermission';
+  static const String csWaitingOverlayPermission = 'csWaitingOverlayPermission';
   static const String csOverlayPermissionNeeded = 'csOverlayPermissionNeeded';
   static const String csForegroundCatchUpOnly = 'csForegroundCatchUpOnly';
   static const String csForegroundCatchUpDetail = 'csForegroundCatchUpDetail';
@@ -378,7 +398,7 @@ mixin AppLocale {
     openSource: '应用是开源的',
     donateAuthor: '捐赠作者',
     deviceSetting: '设备设置',
-    autoSelectIp: '自动扫描设备IP',
+    autoSelectIp: '连接失败时自动重新查找 IP',
     downloadThread: '下载线程数',
     uploadThread: '上传线程数',
     deviceNameEmptyHint: '设备名称不能为空',
@@ -389,6 +409,27 @@ mixin AppLocale {
     pasteText: '粘贴文本',
     pasteFile: '粘贴文件',
     findAvailableDevice: '查找可用设备',
+    pairingAutomatic: '自动发现',
+    pairingDirect: '指定地址',
+    pairingManual: '手动配置',
+    quickPairInstruction: '请先在目标电脑的托盘菜单中开启“快速配对”',
+    quickPairOneShotHint: '首次配对成功后，快速配对会自动关闭',
+    startDeviceDiscovery: '开始扫描',
+    scanningDevices: '正在扫描局域网中的设备…',
+    deviceAddress: '设备地址',
+    deviceAddressHint: 'IP 地址或主机名',
+    devicePort: '端口',
+    connectAndFetchCredentials: '连接并获取设备信息',
+    connectingToDevice: '正在连接 %a…',
+    pairingCredentialsReady: '密钥和证书已获取',
+    pairingNoLocalNetwork: '未找到可用于扫描的局域网连接',
+    pairingNoDeviceFound: '未找到可配对设备，请确认目标设备已开启快速配对',
+    pairingConnectionFailed: '无法连接 %a，请检查地址、端口、防火墙和 WindSend 服务',
+    pairingRejected: '目标设备未开启快速配对，请开启后重试',
+    pairingProtocolFailed: '该地址不是可配对的 WindSend 设备，或双方版本不兼容',
+    manualConfigurationHint: '已有连接信息时，可以完整手动填写设备名称、地址、密钥和证书',
+    showSecretKey: '显示密钥',
+    hideSecretKey: '隐藏密钥',
     operationSuccess: '操作成功',
     shareFailed: '分享失败',
     shareSuccess: '发送到 %a 成功',
@@ -704,7 +745,7 @@ mixin AppLocale {
     openSource: 'The app is open source',
     donateAuthor: 'Donate author',
     deviceSetting: 'Device setting',
-    autoSelectIp: 'Auto scan device IP',
+    autoSelectIp: 'Rediscover IP after connection failure',
     downloadThread: 'Download thread',
     uploadThread: 'Upload thread',
     deviceNameEmptyHint: 'Device name cannot be empty',
@@ -715,6 +756,34 @@ mixin AppLocale {
     pasteText: 'Paste text',
     pasteFile: 'Paste file',
     findAvailableDevice: 'Find available device',
+    pairingAutomatic: 'Automatic',
+    pairingDirect: 'By address',
+    pairingManual: 'Manual',
+    quickPairInstruction:
+        'Enable Quick Pair from the target computer\'s tray menu first',
+    quickPairOneShotHint:
+        'Quick Pair turns off after the first successful pairing',
+    startDeviceDiscovery: 'Start scanning',
+    scanningDevices: 'Scanning the local network for devices…',
+    deviceAddress: 'Device address',
+    deviceAddressHint: 'IP address or hostname',
+    devicePort: 'Port',
+    connectAndFetchCredentials: 'Connect and get device info',
+    connectingToDevice: 'Connecting to %a…',
+    pairingCredentialsReady: 'Secret key and certificate received',
+    pairingNoLocalNetwork:
+        'No local network connection is available for scanning',
+    pairingNoDeviceFound:
+        'No pairable device found. Make sure Quick Pair is enabled on the target',
+    pairingConnectionFailed:
+        'Could not connect to %a. Check the address, port, firewall, and WindSend service',
+    pairingRejected: 'Quick Pair is not enabled on the target device',
+    pairingProtocolFailed:
+        'This address is not a pairable WindSend device, or the versions are incompatible',
+    manualConfigurationHint:
+        'If you already have the connection details, enter the device name, address, secret key, and certificate manually',
+    showSecretKey: 'Show secret key',
+    hideSecretKey: 'Hide secret key',
     operationSuccess: 'Operation success',
     shareFailed: 'Share failed',
     shareSuccess: 'Successfully sent to the %a',
@@ -991,11 +1060,9 @@ mixin AppLocale {
         'iOS may only capture the final clipboard state after the app becomes observable again.',
     // Clipboard Sync - Status Messages
     csSessionOpened: 'Session opened for %a.',
-    csSessionResumed:
-        'Created a new session and resumed clipboard monitoring.',
+    csSessionResumed: 'Created a new session and resumed clipboard monitoring.',
     csSessionStopped: 'Session stopped.',
-    csClipboardWriteFailed:
-        'Failed to write text into the local clipboard.',
+    csClipboardWriteFailed: 'Failed to write text into the local clipboard.',
     csReconnectScheduled: 'Reconnect scheduled: %a',
     csForegroundCatchUpCaptured:
         'Foreground catch-up captured the final clipboard state from the last non-observable window.',

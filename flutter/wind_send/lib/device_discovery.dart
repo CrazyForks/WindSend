@@ -7,6 +7,109 @@ import 'device.dart';
 import 'protocol/protocol.dart';
 import 'db/shared_preferences/cnf.dart' show globalLocalDeviceName;
 
+/// A validated network endpoint used for both directed pairing and LAN scans.
+final class DeviceEndpoint {
+  final String host;
+  final int port;
+
+  factory DeviceEndpoint({
+    required String host,
+    int port = Device.defaultPort,
+  }) {
+    var normalizedHost = host.trim();
+    if (normalizedHost.startsWith('[') && normalizedHost.endsWith(']')) {
+      normalizedHost = normalizedHost.substring(1, normalizedHost.length - 1);
+    }
+    if (normalizedHost.isEmpty) {
+      throw ArgumentError.value(host, 'host', 'must not be empty');
+    }
+    if (port < 1 || port > 65535) {
+      throw RangeError.range(port, 1, 65535, 'port');
+    }
+    return DeviceEndpoint._(normalizedHost, port);
+  }
+
+  const DeviceEndpoint._(this.host, this.port);
+
+  String get authority => host.contains(':') ? '[$host]:$port' : '$host:$port';
+}
+
+/// Discovery failures are typed so callers can present actionable recovery
+/// instead of leaking socket and protocol implementation details to users.
+sealed class DeviceDiscoveryFailure implements Exception {
+  const DeviceDiscoveryFailure();
+}
+
+final class NoLocalNetworkFailure extends DeviceDiscoveryFailure {
+  const NoLocalNetworkFailure();
+
+  @override
+  String toString() => 'No private local network interface is available';
+}
+
+final class NoPairableDeviceFailure extends DeviceDiscoveryFailure {
+  const NoPairableDeviceFailure();
+
+  @override
+  String toString() => 'No pairable WindSend device was found';
+}
+
+final class DevicePairingConnectionFailure extends DeviceDiscoveryFailure {
+  final DeviceEndpoint endpoint;
+  final Object cause;
+
+  const DevicePairingConnectionFailure(this.endpoint, this.cause);
+
+  @override
+  String toString() => 'Could not connect to ${endpoint.authority}: $cause';
+}
+
+final class DevicePairingRejectedFailure extends DeviceDiscoveryFailure {
+  final DeviceEndpoint endpoint;
+  final int responseCode;
+  final String? responseMessage;
+
+  const DevicePairingRejectedFailure(
+    this.endpoint,
+    this.responseCode,
+    this.responseMessage,
+  );
+
+  @override
+  String toString() =>
+      'Pairing was rejected by ${endpoint.authority} ($responseCode)';
+}
+
+final class DevicePairingProtocolFailure extends DeviceDiscoveryFailure {
+  final DeviceEndpoint endpoint;
+  final Object cause;
+
+  const DevicePairingProtocolFailure(this.endpoint, this.cause);
+
+  @override
+  String toString() =>
+      'Invalid pairing response from ${endpoint.authority}: $cause';
+}
+
+abstract interface class DevicePairingService {
+  Future<Device> discover();
+
+  Future<Device> pairAt(DeviceEndpoint endpoint);
+}
+
+/// Production pairing service. Keeping the UI behind an interface makes every
+/// loading, success, and recovery path testable without opening real sockets.
+final class LanDevicePairingService implements DevicePairingService {
+  const LanDevicePairingService();
+
+  @override
+  Future<Device> discover() => DeviceDiscoveryUtils.search();
+
+  @override
+  Future<Device> pairAt(DeviceEndpoint endpoint) =>
+      DeviceDiscoveryUtils.pairAt(endpoint);
+}
+
 /// Extension for device discovery and network scanning functionality
 extension DeviceDiscovery on Device {
   /// Automatically scan and update ip
@@ -103,10 +206,7 @@ class DeviceDiscoveryUtils {
         if (!_isPrivateIPv4(addr.address)) {
           continue;
         }
-        final prefix = addr.address.substring(
-          0,
-          addr.address.lastIndexOf('.'),
-        );
+        final prefix = addr.address.substring(0, addr.address.lastIndexOf('.'));
         bySubnet.putIfAbsent(prefix, () => addr.address);
       }
     }
@@ -186,7 +286,7 @@ class DeviceDiscoveryUtils {
         .take(rangeNum)
         .firstWhere(
           (element) => element.secretKey != '',
-          orElse: () => throw Exception('no device found'),
+          orElse: () => throw const NoPairableDeviceFailure(),
         )
         .whenComplete(() => subscription?.cancel());
 
@@ -203,61 +303,115 @@ class DeviceDiscoveryUtils {
     String ip, {
     Duration timeout = const Duration(seconds: 2),
   }) async {
-    var device = Device(targetDeviceName: '', iP: ip, secretKey: '');
-    SecureSocket conn;
     try {
-      conn = await SecureSocket.connect(
-        ip,
-        Device.defaultPort,
-        onBadCertificate: (X509Certificate certificate) {
-          return true;
-        },
-        timeout: timeout,
+      final device = await pairAt(DeviceEndpoint(host: ip), timeout: timeout);
+      msgController.add(device);
+    } catch (_) {
+      msgController.add(Device(targetDeviceName: '', iP: ip, secretKey: ''));
+    }
+  }
+
+  /// Pair with one explicitly selected endpoint and return all connection
+  /// credentials needed to persist a usable [Device].
+  static Future<Device> pairAt(
+    DeviceEndpoint endpoint, {
+    Duration timeout = const Duration(seconds: 3),
+  }) async {
+    SecureSocket? conn;
+    try {
+      try {
+        conn = await SecureSocket.connect(
+          endpoint.host,
+          endpoint.port,
+          // Quick Pair is the trust-bootstrap step: its response supplies the
+          // CA that authenticates every subsequent connection.
+          onBadCertificate: (_) => true,
+          timeout: timeout,
+        );
+      } on HandshakeException catch (error) {
+        throw DevicePairingProtocolFailure(endpoint, error);
+      } catch (error) {
+        throw DevicePairingConnectionFailure(endpoint, error);
+      }
+
+      final headInfo = HeadInfo(
+        globalLocalDeviceName,
+        DeviceAction.matchDevice,
+        'no need',
+        '',
       );
-    } catch (_) {
-      msgController.add(device);
-      return;
-    }
-    var headInfo = HeadInfo(
-      globalLocalDeviceName,
-      DeviceAction.matchDevice,
-      'no need',
-      '',
-    );
-    await headInfo.writeToConn(conn);
-    await conn.flush();
 
-    Future<void> destroy() async {
-      await conn.flush();
-      await conn.close();
-      conn.destroy();
-    }
+      RespHead respHead;
+      try {
+        await headInfo.writeToConn(conn);
+        await conn.flush();
+        (respHead, _) = await RespHead.readHeadAndBodyFromConn(
+          conn,
+          timeout: timeout,
+        );
+      } on TimeoutException catch (error) {
+        throw DevicePairingConnectionFailure(endpoint, error);
+      } on SocketException catch (error) {
+        throw DevicePairingConnectionFailure(endpoint, error);
+      } on DeviceDiscoveryFailure {
+        rethrow;
+      } catch (error) {
+        throw DevicePairingProtocolFailure(endpoint, error);
+      }
 
-    RespHead respHead;
-    try {
-      (respHead, _) = await RespHead.readHeadAndBodyFromConn(conn);
-    } catch (_) {
-      msgController.add(device);
-      return;
-    }
-    await destroy();
+      if (respHead.code != Device.respOkCode) {
+        throw DevicePairingRejectedFailure(
+          endpoint,
+          respHead.code,
+          respHead.msg,
+        );
+      }
+      if (respHead.msg == null) {
+        throw DevicePairingProtocolFailure(
+          endpoint,
+          const FormatException('response message is missing'),
+        );
+      }
 
-    if (respHead.code != Device.respOkCode || respHead.msg == null) {
-      msgController.add(device);
-      return;
+      try {
+        final json = jsonDecode(respHead.msg!);
+        if (json is! Map<String, dynamic>) {
+          throw const FormatException('response message is not an object');
+        }
+        final resp = MatchActionResp.fromJson(json);
+        if (resp.deviceName.trim().isEmpty ||
+            resp.secretKeyHex.trim().isEmpty ||
+            resp.caCertificate.trim().isEmpty) {
+          throw const FormatException('response credentials are incomplete');
+        }
+        return Device(
+          targetDeviceName: resp.deviceName.trim(),
+          iP: endpoint.host,
+          port: endpoint.port,
+          secretKey: resp.secretKeyHex.trim(),
+          trustedCertificate: resp.caCertificate,
+        );
+      } catch (error) {
+        throw DevicePairingProtocolFailure(endpoint, error);
+      }
+    } finally {
+      if (conn != null) {
+        try {
+          await conn.flush();
+        } catch (_) {}
+        try {
+          await conn.close();
+        } catch (_) {}
+        conn.destroy();
+      }
     }
-    var resp = MatchActionResp.fromJson(jsonDecode(respHead.msg!));
-    device.secretKey = resp.secretKeyHex;
-    device.targetDeviceName = resp.deviceName;
-    device.trustedCertificate = resp.caCertificate;
-    msgController.add(device);
   }
 
   /// Search for devices on the local network
   static Future<Device> search() async {
     final myIps = await getLocalIps();
     if (myIps.isEmpty) {
-      throw Exception('no local ip found');
+      throw const NoLocalNetworkFailure();
     }
     return await _matchDeviceLoop(StreamController<Device>(), myIps);
   }

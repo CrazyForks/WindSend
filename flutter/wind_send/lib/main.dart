@@ -2,7 +2,6 @@ import 'dart:io';
 import 'dart:async';
 // import 'dart:isolate';
 // import 'dart:typed_data';
-import 'dart:math';
 import 'dart:ui';
 import 'dart:isolate';
 import 'dart:developer' as dev;
@@ -22,6 +21,7 @@ import 'db/sqlite/history_service.dart';
 import 'theme.dart';
 import 'language.dart';
 import 'ui/setting/setting.dart';
+import 'ui/device_pairing/add_device_dialog.dart';
 import 'ui/transfer_history/history_page.dart';
 import 'utils/utils.dart';
 import 'sorting.dart';
@@ -284,191 +284,6 @@ class _MyHomePageState extends State<MyHomePage> {
         child: const Icon(Icons.add),
       ),
       body: MainBody(devices: devices, onDevicesChange: devicesRebuild),
-    );
-  }
-}
-
-class AddNewDeviceDialog extends StatefulWidget {
-  final List<Device> devices;
-
-  final void Function() onAddDevice;
-
-  const AddNewDeviceDialog({
-    super.key,
-    required this.devices,
-    required this.onAddDevice,
-  });
-
-  @override
-  State<AddNewDeviceDialog> createState() => _AddNewDeviceDialogState();
-}
-
-class _AddNewDeviceDialogState extends State<AddNewDeviceDialog> {
-  final _formKey = GlobalKey<FormState>();
-  // final deviceNameController = TextEditingController();
-  final ipController = TextEditingController();
-  final secretKeyHexController = TextEditingController();
-  final trustedCertificateController = TextEditingController();
-  // check name
-  String deviceName = '';
-  bool autoSelect = true;
-  TaskStatus status = TaskStatus.idle;
-  String? failDoneMsg;
-
-  @override
-  Widget build(BuildContext context) {
-    return alertDialogDefault(
-      context,
-      Row(
-        mainAxisAlignment: MainAxisAlignment.spaceAround,
-        children: [
-          Text(context.formatString(AppLocale.addDevice, [])),
-          const SizedBox(width: 10),
-          IconButton(
-            onPressed: () async {
-              setState(() {
-                status = TaskStatus.pending;
-              });
-              dynamic err;
-              Device? newDevice;
-              try {
-                newDevice = await DeviceDiscoveryUtils.search();
-              } catch (e, s) {
-                err = e;
-                failDoneMsg = e.toString();
-                SharedLogger().logger.e(
-                  'search device failed',
-                  error: e,
-                  stackTrace: s,
-                );
-              }
-              if (err != null) {
-                setState(() {
-                  status = TaskStatus.failDone;
-                });
-                return;
-              }
-              if (widget.devices.any(
-                    (element) =>
-                        element.targetDeviceName == newDevice!.targetDeviceName,
-                  ) ||
-                  newDevice!.targetDeviceName.isEmpty) {
-                newDevice!.targetDeviceName =
-                    newDevice.targetDeviceName +
-                    Random().nextInt(1000).toString();
-              }
-              setState(() {
-                status = TaskStatus.successDone;
-                deviceName = newDevice!.targetDeviceName;
-                ipController.text = newDevice.iP;
-                secretKeyHexController.text = newDevice.secretKey;
-                trustedCertificateController.text =
-                    newDevice.trustedCertificate;
-              });
-            },
-            icon: switch (status) {
-              TaskStatus.idle => Tooltip(
-                message: context.formatString(
-                  AppLocale.findAvailableDevice,
-                  [],
-                ),
-                child: const Icon(Icons.search),
-              ),
-              TaskStatus.failDone => Tooltip(
-                message: failDoneMsg,
-                child: const Icon(Icons.error, color: Colors.red),
-              ),
-              TaskStatus.pending => SizedBox(
-                width: const IconThemeData.fallback().size,
-                height: const IconThemeData.fallback().size,
-                child: const CircularProgressIndicator(),
-              ),
-              TaskStatus.successDone => const Icon(Icons.check),
-            },
-          ),
-        ],
-      ),
-      content: Form(
-        key: _formKey,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            SwitchListTile(
-              contentPadding: const EdgeInsets.all(0),
-              title: Text(context.formatString(AppLocale.autoSelectIp, [])),
-              value: autoSelect,
-              onChanged: (value) {
-                setState(() {
-                  autoSelect = value;
-                });
-              },
-            ),
-            if (!autoSelect) ...[
-              const Divider(color: Colors.transparent),
-              TextFormField(
-                controller: ipController,
-                decoration: const InputDecoration(
-                  border: OutlineInputBorder(),
-                  labelText: 'Host',
-                ),
-                validator: Device.ipValidator(context, autoSelect),
-              ),
-            ],
-            const Divider(color: Colors.transparent),
-            TextFormField(
-              controller: secretKeyHexController,
-              decoration: const InputDecoration(
-                border: OutlineInputBorder(),
-                labelText: 'SecretKey',
-              ),
-              validator: Device.secretKeyValidator(context),
-            ),
-            const Divider(color: Colors.transparent),
-            TextFormField(
-              controller: trustedCertificateController,
-              maxLines: 3,
-              minLines: 1,
-              decoration: const InputDecoration(
-                border: OutlineInputBorder(),
-                labelText: 'Certificate',
-              ),
-              validator: Device.certificateAuthorityValidator(context),
-            ),
-          ],
-        ),
-      ),
-      canConfirm: () {
-        return _formKey.currentState!.validate();
-      },
-      onConfirmed: () {
-        var newDevice = Device(
-          targetDeviceName: deviceName.isEmpty
-              ? Random().nextInt(10000).toString()
-              : deviceName,
-          iP: ipController.text.isEmpty ? '192.168.1.1' : ipController.text,
-          secretKey: secretKeyHexController.text,
-          autoSelect: autoSelect,
-          trustedCertificate: trustedCertificateController.text,
-        );
-        // Web device uses relay for clipboard only, disable local actions
-        if (newDevice.iP.toLowerCase() == Device.webIP) {
-          newDevice.iP = Device.webIP;
-          newDevice.actionCopy = false;
-          newDevice.actionPasteText = false;
-          newDevice.actionPasteFile = false;
-          newDevice.actionWebCopy = true;
-          newDevice.actionWebPaste = true;
-        }
-        if (widget.devices.any(
-          (element) => element.targetDeviceName == newDevice.targetDeviceName,
-        )) {
-          throw Exception('save device failed, targetDeviceName is duplicate');
-        }
-        newDevice.uniqueId = generateRandomString(16);
-        widget.devices.add(newDevice);
-        LocalConfig.setDevice(newDevice);
-        widget.onAddDevice();
-      },
     );
   }
 }

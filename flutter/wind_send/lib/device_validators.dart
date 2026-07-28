@@ -12,11 +12,12 @@ String? Function(String?) deviceNameValidator(
   List<Device> devices,
 ) {
   return (String? value) {
-    if (value == null || value.isEmpty) {
+    final normalizedValue = value?.trim() ?? '';
+    if (normalizedValue.isEmpty) {
       return context.formatString(AppLocale.deviceNameEmptyHint, []);
     }
     for (final element in devices) {
-      if (element.targetDeviceName == value) {
+      if (element.targetDeviceName == normalizedValue) {
         return context.formatString(AppLocale.deviceNameRepeatHint, []);
       }
     }
@@ -33,7 +34,7 @@ String? Function(String?) portValidator(BuildContext context) {
       return context.formatString(AppLocale.mustBeNumber, ['Port']);
     }
     final int port = int.parse(value);
-    if (port < 0 || port > 65535) {
+    if (port < 1 || port > 65535) {
       return context.formatString(AppLocale.invalidPort, []);
     }
     return null;
@@ -45,7 +46,7 @@ String? Function(String?) ipValidator(BuildContext context, bool autoSelect) {
     if (autoSelect) {
       return null;
     }
-    if (value == null || value.isEmpty) {
+    if (value == null || value.trim().isEmpty) {
       return context.formatString(AppLocale.cannotBeEmpty, ['IP']);
     }
     return null;
@@ -54,7 +55,7 @@ String? Function(String?) ipValidator(BuildContext context, bool autoSelect) {
 
 String? Function(String?) secretKeyValidator(BuildContext context) {
   return (String? value) {
-    if (value == null || value.isEmpty) {
+    if (value == null || value.trim().isEmpty) {
       return context.formatString(AppLocale.cannotBeEmpty, ['SecretKey']);
     }
     return null;
@@ -69,7 +70,7 @@ String? Function(String?) filePickerPackageNameValidator(BuildContext context) {
 
 String? Function(String?) certificateAuthorityValidator(BuildContext context) {
   return (String? value) {
-    if (value == null || value.isEmpty) {
+    if (value == null || value.trim().isEmpty) {
       return context.formatString(AppLocale.cannotBeEmpty, ['Certificate']);
     }
     return null;
