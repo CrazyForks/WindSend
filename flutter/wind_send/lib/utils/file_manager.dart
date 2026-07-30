@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:flutter/services.dart';
+import 'package:open_filex/open_filex.dart';
 import 'package:path/path.dart' as p;
 import 'package:url_launcher/url_launcher.dart';
 
@@ -27,6 +28,71 @@ final class FileManagerDirectoryTarget extends FileManagerTarget {
 }
 
 typedef DirectoryExists = Future<bool> Function(String path);
+typedef FileExists = Future<bool> Function(String path);
+typedef FileOpener = Future<OpenResult> Function(String path);
+
+enum FileOpenFailureReason {
+  missing,
+  noApplication,
+  permissionDenied,
+  platformError,
+}
+
+sealed class FileOpenOutcome {
+  const FileOpenOutcome();
+}
+
+final class FileOpened extends FileOpenOutcome {
+  const FileOpened();
+}
+
+final class FileOpenFailed extends FileOpenOutcome {
+  const FileOpenFailed(this.reason, {this.platformMessage});
+
+  final FileOpenFailureReason reason;
+  final String? platformMessage;
+}
+
+/// Opens a single file with its platform-associated application.
+///
+/// Keeping this separate from [openInFileManager] prevents a file action from
+/// silently changing into a directory action when the file is unavailable.
+Future<FileOpenOutcome> openFileTarget(
+  FileManagerFileTarget target, {
+  FileExists? fileExists,
+  FileOpener? fileOpener,
+}) async {
+  final exists = fileExists ?? (path) => File(path).exists();
+  if (!await exists(target.path)) {
+    return const FileOpenFailed(FileOpenFailureReason.missing);
+  }
+
+  try {
+    final open = fileOpener ?? (path) => OpenFilex.open(path);
+    final result = await open(target.path);
+    return switch (result.type) {
+      ResultType.done => const FileOpened(),
+      ResultType.fileNotFound => const FileOpenFailed(
+        FileOpenFailureReason.missing,
+      ),
+      ResultType.noAppToOpen => const FileOpenFailed(
+        FileOpenFailureReason.noApplication,
+      ),
+      ResultType.permissionDenied => const FileOpenFailed(
+        FileOpenFailureReason.permissionDenied,
+      ),
+      ResultType.error => FileOpenFailed(
+        FileOpenFailureReason.platformError,
+        platformMessage: result.message,
+      ),
+    };
+  } catch (error) {
+    return FileOpenFailed(
+      FileOpenFailureReason.platformError,
+      platformMessage: '$error',
+    );
+  }
+}
 
 /// Resolves the closest directory that can still be opened for [target].
 ///

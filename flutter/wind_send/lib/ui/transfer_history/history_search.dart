@@ -6,6 +6,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../language.dart';
 import 'history.dart';
+import 'history_detail_dialog.dart';
 import 'history_item_card.dart';
 
 // ============================================================================
@@ -729,6 +730,13 @@ class _DebouncedSearchResultsState extends State<_DebouncedSearchResults> {
                 onTap: widget.onItemTap != null
                     ? (_) => widget.onItemTap!(item)
                     : null,
+                onLongPress: (item) => HistoryDetailDialog.show(
+                  context,
+                  item,
+                  fromDeviceName: widget.fromDeviceName,
+                  toDeviceName: widget.toDeviceName,
+                  onResend: widget.onResend,
+                ),
               );
             },
           ),

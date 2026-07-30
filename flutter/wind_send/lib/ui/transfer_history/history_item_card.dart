@@ -1,17 +1,15 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_localization/flutter_localization.dart';
 import 'package:intl/intl.dart';
 
 import '../../language.dart';
-import '../../utils/file_manager.dart';
 import '../../utils/utils.dart';
-import '../../toast.dart';
 import 'history.dart';
-import 'history_file_manager.dart';
-import 'image_preview_dialog.dart';// =============================================================================
+import 'history_actions.dart';
+
+// =============================================================================
 // Type Aliases for Callbacks
 // =============================================================================
 
@@ -130,69 +128,14 @@ class _HistoryItemCardState extends State<HistoryItemCard>
   // ===========================================================================
 
   Future<void> _handlePrimaryAction() async {
-    widget.onTap?.call(widget.item);
-
-    switch (widget.item.type) {
-      case TransferType.text:
-        await _copyTextToClipboard();
-        break;
-      case TransferType.image:
-        await _previewImage();
-        break;
-      case TransferType.file:
-      case TransferType.batch:
-        await _openInFileManager();
-        break;
+    final result = await performHistoryPrimaryAction(context, widget.item);
+    if (result == HistoryActionResult.completed) {
+      widget.onTap?.call(widget.item);
     }
   }
 
-  Future<void> _copyTextToClipboard() async {
-    final text = widget.item.textPayload;
-    if (text == null || text.isEmpty) {
-      if (!mounted) return;
-      ToastResult(
-        message: context.formatString(AppLocale.textContentEmpty, []),
-        status: ToastStatus.failure,
-      ).showToast(context);
-      return;
-    }
-
-    await Clipboard.setData(ClipboardData(text: text));
-    if (!mounted) return;
-    ToastResult(
-      message: context.formatString(
-        AppLocale.historyDetailCopiedToClipboard,
-        [],
-      ),
-      status: ToastStatus.success,
-    ).showToast(context);
-  }
-
-  Future<void> _previewImage() async {
-    if (!mounted) return;
-    await ImagePreviewDialog.show(context, widget.item);
-  }
-
-  Future<void> _openInFileManager() async {
-    final target = await resolveHistoryFileManagerTarget(widget.item);
-    if (target == null) {
-      if (!mounted) return;
-      ToastResult(
-        message: context.formatString(AppLocale.filePathUnavailable, []),
-        status: ToastStatus.failure,
-      ).showToast(context);
-      return;
-    }
-
-    final success = await openInFileManager(target);
-    if (!mounted) return;
-
-    if (!success) {
-      ToastResult(
-        message: context.formatString(AppLocale.cannotOpenFileLocation, []),
-        status: ToastStatus.failure,
-      ).showToast(context);
-    }
+  Future<void> _handleShare() async {
+    await shareHistoryItem(context, widget.item);
   }
 
   // ===========================================================================
@@ -435,6 +378,7 @@ class _HistoryItemCardState extends State<HistoryItemCard>
                             ],
                           ),
                         ),
+                        _buildShareButton(colorScheme),
                         _buildPinButton(colorScheme),
                       ],
                     ),
@@ -508,6 +452,7 @@ class _HistoryItemCardState extends State<HistoryItemCard>
                         ),
                       ),
                     ),
+                    _buildShareButton(colorScheme),
                     _buildPinButton(colorScheme),
                   ],
                 ),
@@ -579,6 +524,7 @@ class _HistoryItemCardState extends State<HistoryItemCard>
                         ),
                       ),
                     ),
+                    _buildShareButton(colorScheme),
                     _buildPinButton(colorScheme),
                   ],
                 ),
@@ -708,6 +654,7 @@ class _HistoryItemCardState extends State<HistoryItemCard>
                             ),
                           ),
                         ),
+                        _buildShareButton(colorScheme),
                         _buildPinButton(colorScheme),
                         const SizedBox(width: 4),
                         _buildExpandButton(colorScheme),
@@ -836,6 +783,26 @@ class _HistoryItemCardState extends State<HistoryItemCard>
           color: widget.item.isPinned
               ? colorScheme.primary
               : colorScheme.onSurfaceVariant.withValues(alpha: 0.5),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildShareButton(ColorScheme colorScheme) {
+    if (!widget.item.supportsSystemShare) return const SizedBox.shrink();
+
+    return Tooltip(
+      message: context.formatString(AppLocale.share, []),
+      child: InkWell(
+        onTap: _handleShare,
+        borderRadius: BorderRadius.circular(20),
+        child: Padding(
+          padding: const EdgeInsets.all(8.0),
+          child: Icon(
+            Icons.share_outlined,
+            size: 18,
+            color: colorScheme.onSurfaceVariant,
+          ),
         ),
       ),
     );

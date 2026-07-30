@@ -12,12 +12,15 @@ import '../../db/sqlite/history_cleanup_service.dart';
 import '../../db/shared_preferences/cnf.dart';
 import '../../device.dart';
 import '../../language.dart';
+import '../../utils/file_manager.dart';
 import 'history.dart';
+import 'history_actions.dart';
 import 'history_date_section.dart';
 import 'history_filter.dart' hide FilterDeviceInfo;
 import 'history_item_card.dart';
 import 'history_search.dart';
 import 'history_detail_dialog.dart';
+import 'history_file_manager.dart';
 
 // =============================================================================
 // Filter Tab Enum
@@ -777,111 +780,57 @@ class _HistoryPageState extends State<HistoryPage>
 
   /// Resend text content
   Future<void> _resendText(TransferHistoryItem item, Device device) async {
-    if (item.textPayload == null || item.textPayload!.isEmpty) {
+    final text = await resolveHistoryTextContent(item);
+    if (text == null || text.isEmpty) {
+      if (!mounted) return;
       throw Exception(
         context.formatString(AppLocale.textContentUnavailable, []),
       );
     }
 
     await device.doPasteTextAction(
-      text: item.textPayload!,
+      text: text,
       timeout: const Duration(seconds: 5),
     );
   }
 
   /// Resend files/images/batch
   Future<void> _resendFiles(TransferHistoryItem item, Device device) async {
-    final filesPayload = item.filesPayload;
-
-    if (filesPayload.isEmpty) {
-      throw Exception(
-        context.formatString(AppLocale.historyDetailFileInfoUnavailable, []),
-      );
+    final List<String> filePaths = [];
+    final targets = await resolveHistoryFileManagerTargets(item);
+    final missingPaths = <String>[];
+    for (final target in targets) {
+      final exists = switch (target) {
+        FileManagerFileTarget() => await File(target.path).exists(),
+        FileManagerDirectoryTarget() => await Directory(target.path).exists(),
+      };
+      if (exists) {
+        filePaths.add(target.path);
+      } else {
+        missingPaths.add(target.path);
+      }
     }
 
-    // Build list of file paths from payload
-    final List<String> filePaths = [];
-
-    // Check if we have payloadPath (large files stored separately)
-    if (item.payloadPath != null && item.payloadPath!.isNotEmpty) {
-      final payloadFile = File(item.payloadPath!);
-      if (await payloadFile.exists()) {
-        // For batch transfers, payloadPath might be a directory
-        if (await FileSystemEntity.type(item.payloadPath!) ==
-            FileSystemEntityType.directory) {
-          // It's a directory, we need to extract individual files
-          // For now, try to send the directory itself
-          filePaths.add(item.payloadPath!);
-        } else {
-          // Single file
-          filePaths.add(item.payloadPath!);
-        }
-      } else {
-        if (!mounted) return;
-        throw Exception(
-          context.formatString(AppLocale.fileNotFound, [
-            item.payloadPath ?? '',
-          ]),
-        );
-      }
-    } else if (item.payloadBlob != null && item.payloadBlob!.isNotEmpty) {
-      // Small file stored as blob - need to save to temp file first
+    // Binary-only legacy records have no stable path until the content is
+    // materialized. Path-backed records must never be silently sent partially.
+    if (targets.isEmpty &&
+        item.payloadBlob != null &&
+        item.payloadBlob!.isNotEmpty) {
       final tempDir = Directory.systemTemp;
       final tempFile = File(
         '${tempDir.path}/resend_${DateTime.now().millisecondsSinceEpoch}',
       );
       await tempFile.writeAsBytes(item.payloadBlob!);
       filePaths.add(tempFile.path);
-    } else {
-      // Try to reconstruct file paths from filesJson
-      // This is more complex - filesJson contains metadata but not necessarily full paths
-      // For now, we'll try to find files based on the metadata
-      final files = filesPayload.files;
+    }
 
-      for (final fileInfo in files) {
-        if (fileInfo.isDirectory) continue;
-
-        // Try common save paths
-        final possiblePaths = [
-          LocalConfig.fileSavePath,
-          LocalConfig.imageSavePath,
-        ];
-
-        bool found = false;
-        for (final basePath in possiblePaths) {
-          final fullPath = fileInfo.path.isNotEmpty
-              ? '$basePath/${fileInfo.path}/${fileInfo.name}'
-              : '$basePath/${fileInfo.name}';
-
-          final file = File(fullPath);
-          if (await file.exists()) {
-            filePaths.add(fullPath);
-            found = true;
-            break;
-          }
-        }
-
-        if (!found) {
-          // Try just the filename in common directories
-          for (final basePath in possiblePaths) {
-            final file = File('$basePath/${fileInfo.name}');
-            if (await file.exists()) {
-              filePaths.add(file.path);
-              found = true;
-              break;
-            }
-          }
-        }
-
-        if (!found) {
-          debugPrint('Warning: Could not find file: ${fileInfo.name}');
-        }
-      }
-
-      if (filePaths.isEmpty) {
-        if (!mounted) return;
-        throw Exception(context.formatString(AppLocale.cannotFindFiles, []));
-      }
+    if (missingPaths.isNotEmpty) {
+      if (!mounted) return;
+      throw Exception(
+        context.formatString(AppLocale.historyResendFilesMissing, [
+          '${missingPaths.length}',
+        ]),
+      );
     }
 
     if (filePaths.isEmpty) {
@@ -927,6 +876,7 @@ class _HistoryPageState extends State<HistoryPage>
       item,
       fromDeviceName: item.fromDeviceName,
       toDeviceName: item.toDeviceName,
+      onResend: _handleResend,
     );
   }
 

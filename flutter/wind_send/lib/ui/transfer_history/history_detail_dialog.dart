@@ -7,11 +7,9 @@ import 'package:intl/intl.dart';
 import 'package:path/path.dart' as p;
 
 import '../../language.dart';
-import '../../utils/file_manager.dart';
 import '../../utils/utils.dart';
 import 'history.dart';
-import 'history_file_manager.dart';
-import 'image_preview_dialog.dart';
+import 'history_actions.dart';
 
 // =============================================================================
 // History Detail Dialog (Section 4.4 - Long press to view details)
@@ -22,12 +20,14 @@ class HistoryDetailDialog extends StatelessWidget {
   final TransferHistoryItem item;
   final String? fromDeviceName;
   final String? toDeviceName;
+  final Future<void> Function(TransferHistoryItem item)? onResend;
 
   const HistoryDetailDialog({
     super.key,
     required this.item,
     this.fromDeviceName,
     this.toDeviceName,
+    this.onResend,
   });
 
   /// Show the detail dialog
@@ -36,6 +36,7 @@ class HistoryDetailDialog extends StatelessWidget {
     TransferHistoryItem item, {
     String? fromDeviceName,
     String? toDeviceName,
+    Future<void> Function(TransferHistoryItem item)? onResend,
   }) {
     return showModalBottomSheet(
       context: context,
@@ -54,6 +55,7 @@ class HistoryDetailDialog extends StatelessWidget {
           item: item,
           fromDeviceName: fromDeviceName,
           toDeviceName: toDeviceName,
+          onResend: onResend,
         ),
       ),
     );
@@ -132,6 +134,12 @@ class HistoryDetailDialog extends StatelessWidget {
                     color: colorScheme.primary,
                   ),
                 ),
+              const SizedBox(width: 4),
+              IconButton(
+                tooltip: context.formatString(AppLocale.close, []),
+                onPressed: () => Navigator.pop(context),
+                icon: const Icon(Icons.close_rounded),
+              ),
             ],
           ),
           const SizedBox(height: 24),
@@ -166,7 +174,7 @@ class HistoryDetailDialog extends StatelessWidget {
           const SizedBox(height: 24),
 
           // Actions
-          _buildActions(context, colorScheme),
+          _buildActions(context),
           const SizedBox(height: 20),
         ],
       ),
@@ -285,7 +293,7 @@ class HistoryDetailDialog extends StatelessWidget {
       children: [
         // Image preview - use async widget to handle relative paths
         GestureDetector(
-          onTap: () => _showImagePreview(context),
+          onTap: () => performHistoryPrimaryAction(context, item),
           child: ClipRRect(
             borderRadius: BorderRadius.circular(8),
             child: SizedBox(
@@ -400,80 +408,56 @@ class HistoryDetailDialog extends StatelessWidget {
     );
   }
 
-  Widget _buildActions(BuildContext context, ColorScheme colorScheme) {
-    return Row(
+  Widget _buildActions(BuildContext context) {
+    return Column(
       children: [
-        // Copy/Open action
-        Expanded(
-          child: FilledButton.icon(
-            onPressed: () => _handlePrimaryAction(context),
-            icon: Icon(
-              item.type == TransferType.text
-                  ? Icons.copy_outlined
-                  : Icons.folder_open_outlined,
+        Row(
+          children: [
+            Expanded(
+              child: FilledButton.icon(
+                onPressed: () => _handlePrimaryAction(context),
+                icon: Icon(historyPrimaryActionIcon(item)),
+                label: Text(historyPrimaryActionLabel(context, item)),
+              ),
             ),
-            label: Text(
-              item.type == TransferType.text
-                  ? context.formatString(AppLocale.copy, [])
-                  : context.formatString(
-                      AppLocale.historyDetailOpenDirectory,
-                      [],
-                    ),
+            if (item.supportsSystemShare) ...[
+              const SizedBox(width: 12),
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: () => shareHistoryItem(context, item),
+                  icon: const Icon(Icons.share_outlined),
+                  label: Text(context.formatString(AppLocale.share, [])),
+                ),
+              ),
+            ],
+          ],
+        ),
+        if (onResend != null) ...[
+          const SizedBox(height: 12),
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton.icon(
+              onPressed: () async {
+                final resend = onResend!;
+                Navigator.pop(context);
+                await resend(item);
+              },
+              icon: const Icon(Icons.send_outlined),
+              label: Text(
+                context.formatString(AppLocale.historySendToDevice, []),
+              ),
             ),
           ),
-        ),
-        const SizedBox(width: 12),
-        // Close button
-        OutlinedButton(
-          onPressed: () => Navigator.pop(context),
-          child: Text(context.formatString(AppLocale.historyDetailClose, [])),
-        ),
+        ],
       ],
     );
   }
 
   void _handlePrimaryAction(BuildContext context) async {
-    if (item.type == TransferType.text) {
-      final text = item.textPayload;
-      if (text != null && text.isNotEmpty) {
-        Clipboard.setData(ClipboardData(text: text));
-        Navigator.pop(context);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              context.formatString(
-                AppLocale.historyDetailCopiedToClipboard,
-                [],
-              ),
-            ),
-            duration: const Duration(seconds: 2),
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
-      }
-    } else {
-      final target = await resolveHistoryFileManagerTarget(item);
-      final success = target != null && await openInFileManager(target);
-      if (!success && context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              context.formatString(
-                AppLocale.historyDetailFileInfoUnavailable,
-                [],
-              ),
-            ),
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
-      } else if (context.mounted) {
-        Navigator.pop(context);
-      }
+    final result = await performHistoryPrimaryAction(context, item);
+    if (result == HistoryActionResult.completed && context.mounted) {
+      Navigator.pop(context);
     }
-  }
-
-  void _showImagePreview(BuildContext context) {
-    ImagePreviewDialog.show(context, item);
   }
 
   String _formatDateTime(DateTime dateTime) {

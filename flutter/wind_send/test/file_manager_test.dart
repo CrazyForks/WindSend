@@ -79,6 +79,29 @@ void main() {
       expect(target?.path, directoryPath);
     });
   });
+
+  test(
+    'direct file opening reports a missing file without opening a folder',
+    () async {
+      final target = FileManagerFileTarget(
+        p.absolute('storage', 'WindSend', 'missing.txt'),
+      );
+      var openAttempted = false;
+
+      final result = await openFileTarget(
+        target,
+        fileExists: (_) async => false,
+        fileOpener: (_) async {
+          openAttempted = true;
+          throw StateError('A missing file must not reach the platform opener');
+        },
+      );
+
+      expect(result, isA<FileOpenFailed>());
+      expect((result as FileOpenFailed).reason, FileOpenFailureReason.missing);
+      expect(openAttempted, isFalse);
+    },
+  );
 }
 
 TransferHistoryItem _historyItem(FileInfo file) {

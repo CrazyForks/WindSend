@@ -15,27 +15,44 @@ import 'history.dart';
 Future<FileManagerTarget?> resolveHistoryFileManagerTarget(
   TransferHistoryItem item,
 ) async {
-  final firstFile = item.filesPayload.firstFile;
-  if (firstFile != null && firstFile.path.isNotEmpty) {
-    final path = await _resolvePersistedPath(firstFile.path);
-    if (path == null) return null;
-    return firstFile.isDirectory
-        ? FileManagerTarget.directory(path)
-        : FileManagerTarget.file(path);
-  }
-
-  final payloadPath = item.payloadPath;
-  if (payloadPath == null || payloadPath.isEmpty) return null;
-
-  final path = await _resolvePersistedPath(payloadPath);
-  if (path == null) return null;
-  final type = await FileSystemEntity.type(path);
-  return type == FileSystemEntityType.directory
-      ? FileManagerTarget.directory(path)
-      : FileManagerTarget.file(path);
+  final targets = await resolveHistoryFileManagerTargets(item);
+  return targets.isEmpty ? null : targets.first;
 }
 
-Future<String?> _resolvePersistedPath(String path) async {
+/// Resolves every top-level history entry while preserving whether it was a
+/// file or directory. The persisted kind remains authoritative after deletion.
+Future<List<FileManagerTarget>> resolveHistoryFileManagerTargets(
+  TransferHistoryItem item,
+) async {
+  final targets = <FileManagerTarget>[];
+  for (final file in item.filesPayload.files) {
+    if (file.path.isEmpty) continue;
+
+    final path = await resolveHistoryPersistedPath(file.path);
+    if (path == null) continue;
+    targets.add(
+      file.isDirectory
+          ? FileManagerTarget.directory(path)
+          : FileManagerTarget.file(path),
+    );
+  }
+  if (targets.isNotEmpty) return targets;
+
+  final payloadPath = item.payloadPath;
+  if (payloadPath == null || payloadPath.isEmpty) return targets;
+
+  final path = await resolveHistoryPersistedPath(payloadPath);
+  if (path == null) return targets;
+  final type = await FileSystemEntity.type(path);
+  targets.add(
+    type == FileSystemEntityType.directory
+        ? FileManagerTarget.directory(path)
+        : FileManagerTarget.file(path),
+  );
+  return targets;
+}
+
+Future<String?> resolveHistoryPersistedPath(String path) async {
   if (p.isAbsolute(path)) return path;
 
   try {

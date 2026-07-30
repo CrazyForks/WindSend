@@ -152,6 +152,26 @@ mixin AppLocale {
   static const String textContentEmpty = 'textContentEmpty';
   static const String filePathUnavailable = 'filePathUnavailable';
   static const String cannotOpenFileLocation = 'cannotOpenFileLocation';
+  static const String historyOpenFile = 'historyOpenFile';
+  static const String historySendToDevice = 'historySendToDevice';
+  static const String historyNoApplicationForFile =
+      'historyNoApplicationForFile';
+  static const String historyOpenFilePermissionDenied =
+      'historyOpenFilePermissionDenied';
+  static const String historyOpenFileFailed = 'historyOpenFileFailed';
+  static const String historyFileMissing = 'historyFileMissing';
+  static const String historySelectDirectory = 'historySelectDirectory';
+  static const String historyShareContainsFolders =
+      'historyShareContainsFolders';
+  static const String historyShareUnavailable = 'historyShareUnavailable';
+  static const String historyShareFilesMissing = 'historyShareFilesMissing';
+  static const String historySharePartialTitle = 'historySharePartialTitle';
+  static const String historySharePartialMessage =
+      'historySharePartialMessage';
+  static const String historyShareAvailableFiles =
+      'historyShareAvailableFiles';
+  static const String historyResendFilesMissing =
+      'historyResendFilesMissing';
   static const String deleteRecord = 'deleteRecord';
   static const String deleteRecordTip = 'deleteRecordTip';
   static const String delete = 'delete';
@@ -516,6 +536,20 @@ mixin AppLocale {
     textContentEmpty: '文本内容为空',
     filePathUnavailable: '文件路径不可用',
     cannotOpenFileLocation: '无法打开文件位置',
+    historyOpenFile: '打开文件',
+    historySendToDevice: '发送到设备',
+    historyNoApplicationForFile: '没有可打开此文件的应用',
+    historyOpenFilePermissionDenied: '没有权限打开此文件',
+    historyOpenFileFailed: '无法打开文件',
+    historyFileMissing: '文件已不存在',
+    historySelectDirectory: '选择要打开的目录',
+    historyShareContainsFolders: '批次包含文件夹，无法使用系统分享；可发送到设备',
+    historyShareUnavailable: '没有可分享的内容',
+    historyShareFilesMissing: '文件均已不存在，无法分享',
+    historySharePartialTitle: '部分文件不可用',
+    historySharePartialMessage: '有 %a 个文件已不存在，是否分享其余 %a 个文件？',
+    historyShareAvailableFiles: '分享可用文件',
+    historyResendFilesMissing: '%a 个文件或文件夹已不存在，无法完整重发',
     deleteRecord: '删除记录',
     deleteRecordTip: '确定要删除此传输记录吗？',
     delete: '删除',
@@ -875,6 +909,23 @@ mixin AppLocale {
     textContentEmpty: 'Text content is empty',
     filePathUnavailable: 'File path unavailable',
     cannotOpenFileLocation: 'Cannot open file location',
+    historyOpenFile: 'Open file',
+    historySendToDevice: 'Send to device',
+    historyNoApplicationForFile: 'No application can open this file',
+    historyOpenFilePermissionDenied: 'Permission denied when opening this file',
+    historyOpenFileFailed: 'Cannot open file',
+    historyFileMissing: 'The file no longer exists',
+    historySelectDirectory: 'Select a directory to open',
+    historyShareContainsFolders:
+        'System sharing does not support folders; send to a device instead',
+    historyShareUnavailable: 'No content is available to share',
+    historyShareFilesMissing: 'All files are missing and cannot be shared',
+    historySharePartialTitle: 'Some files are unavailable',
+    historySharePartialMessage:
+        '%a file(s) are missing. Share the remaining %a file(s)?',
+    historyShareAvailableFiles: 'Share available files',
+    historyResendFilesMissing:
+        '%a file(s) or folder(s) are missing; the transfer cannot be resent completely',
     deleteRecord: 'Delete Record',
     deleteRecordTip: 'Are you sure you want to delete this transfer record?',
     delete: 'Delete',
